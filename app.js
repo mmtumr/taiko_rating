@@ -44,16 +44,13 @@ function levelName(level) {
 function scoreBonus(score) {
   const rate = Math.max(0, Math.min(Number(score) / 1_000_000, 1));
   const anchors = [
-    [0.7, -3.0],
-    [0.8, -2.0],
-    [0.85, -1.5],
-    [0.9, -1.0],
-    [0.95, 0.0],
-    [0.97, 0.4],
-    [0.98, 0.7],
-    [0.99, 1.0],
-    [0.995, 1.2],
-    [1.0, 1.4],
+    [0.7, -2.0],
+    [0.75, -1.0],
+    [0.8, 0.0],
+    [0.9, 0.5],
+    [0.95, 1.0],
+    [0.98, 1.3],
+    [1.0, 1.5],
   ];
 
   if (rate <= anchors[0][0]) return anchors[0][1];
