@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Taiko Rating</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="workspace">
+        <div class="topbar">
+          <div>
+            <h1>Taiko Rating</h1>
+            <p>定数 + 分数补正 / Best N</p>
+          </div>
+          <div class="summary-strip">
+            <div>
+              <span>TR</span>
+              <strong id="ratingValue">--</strong>
+            </div>
+            <div>
+              <span>成绩</span>
+              <strong id="recordCount">0</strong>
+            </div>
+            <div>
+              <span>匹配</span>
+              <strong id="matchedCount">0</strong>
+            </div>
+          </div>
+        </div>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h2>玩家数据</h2>
+            <button id="fetchButton" type="button">获取成绩</button>
+          </div>
+          <div class="form-grid">
+            <label>
+              API Key
+              <input id="apiKeyInput" type="password" autocomplete="off" placeholder="tk_xxx" />
+            </label>
+            <label>
+              Player ID
+              <input id="playerIdInput" type="text" inputmode="numeric" placeholder="可留空" />
+            </label>
+            <label>
+              接口
+              <select id="endpointSelect">
+                <option value="hiroba">hiroba 最新成绩</option>
+                <option value="kinoko">kinoko 历史成绩</option>
+              </select>
+            </label>
+            <label>
+              Best N
+              <input id="bestNInput" type="number" min="1" max="100" step="1" value="30" />
+            </label>
+          </div>
+          <p id="fetchStatus" class="status-line"></p>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h2>谱面定数</h2>
+            <div class="button-row">
+              <button id="loadSampleButton" type="button">示例</button>
+              <button id="applyConstantsButton" type="button">应用</button>
+            </div>
+          </div>
+          <textarea id="constantsInput" spellcheck="false" placeholder="song_no,level,const,title&#10;938,4,10.4,零之交响曲&#10;72,2,6.0,The Carnivorous Carnival"></textarea>
+          <p id="constantsStatus" class="status-line"></p>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h2>Rating</h2>
+            <div class="button-row">
+              <button id="recalculateButton" type="button">计算</button>
+              <button id="exportButton" type="button">导出 PNG</button>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>曲名</th>
+                  <th>难度</th>
+                  <th>定数</th>
+                  <th>分数</th>
+                  <th>补正</th>
+                  <th>单曲TR</th>
+                </tr>
+              </thead>
+              <tbody id="ratingTableBody">
+                <tr>
+                  <td colspan="7" class="empty-cell">等待数据</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+
+      <aside class="preview">
+        <div class="preview-head">
+          <h2>图片预览</h2>
+          <span id="imageStatus">未生成</span>
+        </div>
+        <canvas id="ratingCanvas" width="1080" height="1440"></canvas>
+      </aside>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>
