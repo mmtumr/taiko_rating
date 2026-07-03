@@ -2,7 +2,10 @@ const API_BASE = "https://kinoko.zorua.cn/api/v1";
 
 const state = {
   records: [],
-  constants: new Map(),
+  chartData: [],
+  constantsBySong: new Map(),
+  constantsByTitle: new Map(),
+  manualConstants: new Map(),
   rated: [],
 };
 
@@ -29,6 +32,22 @@ const els = {
 
 function chartKey(songNo, level) {
   return `${songNo}:${level}`;
+}
+
+function titleKey(title, level) {
+  return `${normalizeTitle(title)}:${level}`;
+}
+
+function normalizeTitle(value) {
+  return String(value || "")
+    .normalize("NFKC")
+    .toLowerCase()
+    .replaceAll("♡", "")
+    .replaceAll("～", "~")
+    .replaceAll("・", "")
+    .replaceAll("ノ", "の")
+    .replace(/\(裏\)|（裏）|\bura\b|\bedit\b/g, "")
+    .replace(/[^0-9a-z\u3040-\u30ff\u3400-\u9fff]+/g, "");
 }
 
 function levelName(level) {
@@ -119,12 +138,88 @@ function parseConstants(text) {
   return map;
 }
 
+function indexManualConstants() {
+  for (const item of state.manualConstants.values()) {
+    const chart = {
+      title: item.title,
+      aliases: [],
+      const: item.constant,
+      combo: null,
+      source: "manual",
+      needs_encoder: false,
+    };
+    state.constantsBySong.set(chartKey(item.songNo, item.level), chart);
+    if (item.title) {
+      state.constantsByTitle.set(titleKey(item.title, item.level), chart);
+    }
+  }
+}
+
+function indexChartData(charts) {
+  state.constantsBySong.clear();
+  state.constantsByTitle.clear();
+  for (const chart of charts) {
+    const scoreLevel = Number(chart.score_level);
+    if (!Number.isFinite(scoreLevel) || chart.const == null) continue;
+    const indexed = {
+      title: chart.title,
+      aliases: chart.aliases || [],
+      const: Number(chart.const),
+      combo: chart.combo,
+      features: chart.features,
+      source: chart.source,
+      needs_encoder: Boolean(chart.needs_encoder),
+      raw: chart,
+    };
+    const names = [chart.title, ...(chart.aliases || [])].filter(Boolean);
+    for (const name of names) {
+      state.constantsByTitle.set(titleKey(name, scoreLevel), indexed);
+    }
+  }
+  indexManualConstants();
+}
+
+async function loadChartData() {
+  try {
+    const resp = await fetch("data/chart_data.json");
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const charts = await resp.json();
+    state.chartData = Array.isArray(charts) ? charts : [];
+    indexChartData(state.chartData);
+    const excelCount = state.chartData.filter((chart) => chart.source === "excel").length;
+    const pendingCount = state.chartData.filter((chart) => chart.needs_encoder).length;
+    els.constantsStatus.textContent = `已载入 ${state.chartData.length} 张谱面：Excel ${excelCount}，待 encoder ${pendingCount}`;
+    calculateRating();
+  } catch (err) {
+    els.constantsStatus.textContent = `谱面库未载入：${err instanceof Error ? err.message : "未知错误"}`;
+  }
+}
+
+function findChart(record) {
+  const direct = state.constantsBySong.get(chartKey(record.songNo, record.level));
+  if (direct) return direct;
+  const titleCandidates = [
+    record.title,
+    record.titleJp,
+    record.titleCn,
+    ...(record.aliases || []),
+  ].filter(Boolean);
+  for (const title of titleCandidates) {
+    const chart = state.constantsByTitle.get(titleKey(title, record.level));
+    if (chart) return chart;
+  }
+  return null;
+}
+
 function normalizeHirobaScore(item) {
   const detail = item.song_detail ?? {};
   return {
     songNo: Number(item.song_no),
     level: Number(item.level),
     title: detail.song_name || detail.song_name_jp || `song ${item.song_no}`,
+    titleJp: detail.song_name_jp || "",
+    titleCn: detail.song_name || "",
+    aliases: [detail.song_name, detail.song_name_jp, detail.subtitle].filter(Boolean),
     genre: detail.type || "",
     highScore: Number(item.high_score ?? 0),
     good: Number(item.good_cnt ?? 0),
@@ -142,6 +237,9 @@ function normalizeKinokoScore(group) {
     songNo: Number(group.song_no ?? item.song_no),
     level: Number(group.level ?? item.level),
     title: group.title_cn || group.title || `song ${group.song_no ?? item.song_no}`,
+    titleJp: group.title || "",
+    titleCn: group.title_cn || "",
+    aliases: [group.title_cn, group.title, group.subTitle, group.subTitle_cn].filter(Boolean),
     genre: group.genre || "",
     highScore: Number(item.high_score ?? 0),
     good: Number(item.good_cnt ?? 0),
@@ -178,14 +276,16 @@ function calculateRating() {
   const bestN = Math.max(1, Math.min(Number(els.bestNInput.value) || 30, 100));
   const rated = pickBestRecords(state.records)
     .map((record) => {
-      const constant = state.constants.get(chartKey(record.songNo, record.level));
-      if (!constant) return null;
+      const chart = findChart(record);
+      if (!chart) return null;
       const bonus = scoreBonus(record.highScore);
-      const single = constant.constant + bonus;
+      const single = chart.const + bonus;
       return {
         ...record,
-        constant: constant.constant,
-        constantTitle: constant.title,
+        constant: chart.const,
+        constantTitle: chart.title,
+        chartSource: chart.source,
+        needsEncoder: chart.needs_encoder,
         bonus,
         single,
       };
@@ -388,8 +488,9 @@ async function fetchScores() {
 }
 
 function applyConstants() {
-  state.constants = parseConstants(els.constantsInput.value);
-  els.constantsStatus.textContent = `已载入 ${state.constants.size} 张谱面定数`;
+  state.manualConstants = parseConstants(els.constantsInput.value);
+  indexChartData(state.chartData);
+  els.constantsStatus.textContent = `已应用 ${state.manualConstants.size} 条手动定数覆盖`;
   calculateRating();
 }
 
@@ -420,3 +521,4 @@ els.recalculateButton.addEventListener("click", calculateRating);
 els.exportButton.addEventListener("click", exportPng);
 
 renderCanvas([], 0, Number(els.bestNInput.value) || 30);
+loadChartData();

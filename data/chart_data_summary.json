@@ -1,0 +1,30 @@
+{
+  "total": 6094,
+  "by_course": {
+    "Edit": 386,
+    "Hard": 2881,
+    "Normal": 2,
+    "Oni": 2825
+  },
+  "by_source": {
+    "encoder_pending": 5101,
+    "excel": 993
+  },
+  "needs_encoder": 5101,
+  "force_included": [
+    {
+      "title": "DARK EX MACHINA♡",
+      "course": "Normal",
+      "level": 7,
+      "source": "encoder_pending",
+      "path": "ESE-master\\ese\\09 Namco Original\\Dark Ex Machina\\Dark Ex Machina.tja"
+    },
+    {
+      "title": "幽玄之乱",
+      "course": "Normal",
+      "level": 7,
+      "source": "encoder_pending",
+      "path": "ESE-master\\ese\\09 Namco Original\\Yuugen no Ran\\Yuugen no Ran.tja"
+    }
+  ]
+}

@@ -9,4 +9,11 @@ This is a static browser app for:
 - calculating a CHUNITHM-like Taiko Rating
 - rendering and exporting a share image
 
-Open `index.html` in a browser to run it.
+Run a local static server before opening the app, because the browser needs to
+fetch `data/chart_data.json`:
+
+```bash
+python -m http.server 8765
+```
+
+Then open `http://127.0.0.1:8765/`.
