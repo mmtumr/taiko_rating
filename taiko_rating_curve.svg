@@ -3,7 +3,7 @@
 <style>text{font-family:'Microsoft YaHei','Segoe UI',Arial,sans-serif;fill:#25211e}.title{font-size:34px;font-weight:700}.sub{font-size:18px;fill:#6d645c}.label{font-size:18px;font-weight:650}.small{font-size:15px;fill:#6d645c}.tick{font-size:14px;fill:#6d645c}.rank{font-size:16px;font-weight:700;fill:#c84632}.mono{font-family:Consolas,'Microsoft YaHei',monospace;font-size:16px;fill:#3a332e}</style>
 <text x="92" y="50" class="title" text-anchor="start" >Taiko Rating &#20998;&#25968;&#34917;&#27491;&#26354;&#32447;</text>
 <text x="92" y="82" class="sub" text-anchor="start" >&#21333;&#26354; TR = &#35889;&#38754;&#23450;&#25968; + G(&#23448;&#26041;&#20998;&#25968;)</text>
-<text x="92" y="108" class="small" text-anchor="start" >&#36825;&#26159;&#19968;&#26465;&#31867;&#20284; CHUNITHM &#30340;&#36830;&#32493;&#20998;&#27573;&#30452;&#32447;&#65306;70&#19975;&#36215;&#35745;&#65292;75&#19975;/&#38134;&#31929;&#12289;90&#19975;/&#31881;&#38597;&#12289;95&#19975;/&#32043;&#38597;&#12289;100&#19975;/&#26497;&#12290;</text>
+<text x="92" y="108" class="small" text-anchor="start" >&#36825;&#26159;&#19968;&#26465;&#31867;&#20284; CHUNITHM &#30340;&#36830;&#32493;&#20998;&#27573;&#30452;&#32447;&#65306;70&#19975;&#36215;&#35745;&#65292;75&#19975;/&#38134;&#31929;&#12289;90&#19975;/&#31881;&#12289;95&#19975;/&#32043;&#12289;100&#19975;/&#26497;&#12290;</text>
 <line x1="92.00" y1="567.87" x2="942.00" y2="567.87" stroke="#ded7cc" stroke-width="1" />
 <text x="78" y="572.8717948717949" class="tick" text-anchor="end" >-2</text>
 <line x1="92.00" y1="447.36" x2="942.00" y2="447.36" stroke="#ded7cc" stroke-width="1" />
@@ -37,9 +37,9 @@
 <circle cx="233.67" cy="447.36" r="5" fill="#c84632"/>
 <text x="233.66666666666666" y="431.35897435897436" class="rank" text-anchor="middle" >银粹 / 75w</text>
 <circle cx="658.67" cy="266.59" r="5" fill="#c84632"/>
-<text x="658.6666666666666" y="250.5897435897436" class="rank" text-anchor="middle" >粉雅 / 90w</text>
+<text x="658.6666666666666" y="250.5897435897436" class="rank" text-anchor="middle" >粉 / 90w</text>
 <circle cx="800.33" cy="206.33" r="5" fill="#c84632"/>
-<text x="800.3333333333334" y="190.33333333333331" class="rank" text-anchor="middle" >紫雅 / 95w</text>
+<text x="800.3333333333334" y="190.33333333333331" class="rank" text-anchor="middle" >紫 / 95w</text>
 <circle cx="942.00" cy="146.08" r="5" fill="#c84632"/>
 <text x="942.0" y="130.07692307692304" class="rank" text-anchor="middle" >极 / 100w</text>
 <rect x="990" y="155" width="325" height="240" rx="8" fill="#fff8ea" stroke="#d6bd8e"/>

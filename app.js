@@ -1,4 +1,5 @@
 const API_BASE = "https://kinoko.zorua.cn/api/v1";
+const DATA_VERSION = "20260704-encoder-v1-full";
 const RATING_BEST_COUNT = 20;
 const CHART_RENDER_LIMIT = 800;
 
@@ -226,7 +227,7 @@ function updateChartStatus() {
 
 async function loadChartData() {
   try {
-    const resp = await fetch("data/chart_data.json");
+    const resp = await fetch(`data/chart_data.json?v=${DATA_VERSION}`, { cache: "no-store" });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const charts = await resp.json();
     state.chartData = Array.isArray(charts) ? charts : [];
