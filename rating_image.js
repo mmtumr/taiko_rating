@@ -261,11 +261,11 @@
   function rankLabel(score) {
     const s = Number(score || 0);
     if (s >= 1_000_000) return "极";
-    if (s >= 980_000) return "紫雅";
-    if (s >= 950_000) return "粉雅";
-    if (s >= 900_000) return "银粹";
-    if (s >= 800_000) return "金雅";
-    return "雅";
+    if (s >= 950_000) return "紫雅";
+    if (s >= 900_000) return "粉雅";
+    if (s >= 750_000) return "银粹";
+    if (s >= 700_000) return "过关";
+    return "未通";
   }
 
   function drawBackground(ctx) {
@@ -428,7 +428,7 @@
     drawHeader(ctx, classic, ura, allRows.length);
     drawRadar(ctx, classic.dimensions);
     drawSection(ctx, "表 Rating B20", "旧 Excel 公式：定数得点 x 良率表现", classic.b20, 730, "classic");
-    drawSection(ctx, "里 Rating B20", "新公式：谱面定数 + 分数补正，100 万封顶", ura.b20, 1280, "new");
+    drawSection(ctx, "里 Rating B20", "新公式：谱面定数 + 分数补正，70 万起计，100 万封顶", ura.b20, 1280, "new");
     drawText(ctx, "Taiko Rating System | 由菌菌成绩与本地谱面库生成", IMAGE_W / 2, IMAGE_H - 74, {
       size: 22,
       color: "#aaa19b",

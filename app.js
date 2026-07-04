@@ -119,14 +119,14 @@ function sourceClass(source) {
 }
 
 function scoreBonus(score) {
-  const rate = Math.max(0, Math.min(Number(score) / 1_000_000, 1));
+  const scoreValue = Number(score);
+  if (!Number.isFinite(scoreValue) || scoreValue < 700_000) return null;
+  const rate = Math.max(0, Math.min(scoreValue / 1_000_000, 1));
   const anchors = [
     [0.7, -2.0],
     [0.75, -1.0],
-    [0.8, 0.0],
     [0.9, 0.5],
     [0.95, 1.0],
-    [0.98, 1.3],
     [1.0, 1.5],
   ];
 
@@ -172,6 +172,12 @@ function formatLoose(value, digits = 2) {
   if (value == null || value === "") return "--";
   const number = Number(value);
   return Number.isFinite(number) ? number.toFixed(digits) : String(value);
+}
+
+function formatBonus(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return "--";
+  return `${number >= 0 ? "+" : ""}${number.toFixed(2)}`;
 }
 
 function percent(value) {
@@ -316,7 +322,7 @@ function calculateRating() {
       const chart = findChart(record);
       if (!chart) return null;
       const bonus = scoreBonus(record.highScore);
-      const single = chart.const + bonus;
+      const single = bonus == null ? null : chart.const + bonus;
       return {
         ...record,
         chart,
@@ -331,10 +337,10 @@ function calculateRating() {
       };
     })
     .filter(Boolean)
-    .sort((a, b) => b.single - a.single || b.highScore - a.highScore);
+    .sort((a, b) => (b.single ?? -Infinity) - (a.single ?? -Infinity) || b.highScore - a.highScore);
 
   state.rated = rated;
-  state.ratingBest = rated.slice(0, RATING_BEST_COUNT);
+  state.ratingBest = rated.filter((row) => Number.isFinite(row.single)).slice(0, RATING_BEST_COUNT);
   const classicBest = window.TaikoRatingImage?.calculateClassicMetrics?.(rated)?.b20 || [];
   state.ratingObjects = [
     ...state.ratingBest.map((row) => ({ mode: "里", row, displaySingle: row.single })),
@@ -371,7 +377,7 @@ function renderRatingTable() {
           <td><span class="source-badge ${sourceClass(row.chartSource)}">${sourceLabel(row.chartSource, row.needsEncoder)}</span></td>
           <td class="numeric">${row.constant.toFixed(1)}</td>
           <td class="numeric">${formatScore(row.highScore)}</td>
-          <td class="numeric">${row.bonus >= 0 ? "+" : ""}${row.bonus.toFixed(2)}</td>
+          <td class="numeric">${formatBonus(row.bonus)}</td>
           <td class="numeric">${item.displaySingle.toFixed(2)}</td>
         </tr>
       `;
@@ -403,9 +409,9 @@ function renderRatingDetail(item) {
     ["分数", formatScore(row.highScore)],
     ["良 / 可 / 不可", `${row.good} / ${row.ok} / ${row.ng}`],
     ["良率", percent(goodRate)],
-    ["分数补正", `${row.bonus >= 0 ? "+" : ""}${row.bonus.toFixed(2)}`],
+    ["分数补正", formatBonus(row.bonus)],
     ["当前单曲R", item.displaySingle.toFixed(2)],
-    ["单曲里R", row.single.toFixed(2)],
+    ["单曲里R", Number.isFinite(row.single) ? row.single.toFixed(2) : "--"],
     ["单曲表R", classic ? classic.classicSingle.toFixed(2) : "--"],
     ["定数得点 x", classic ? classic.x.toFixed(2) : "--"],
     ["良率表现 y", classic ? classic.y.toFixed(2) : "--"],

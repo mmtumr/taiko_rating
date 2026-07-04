@@ -1,0 +1,18 @@
+{
+  "input_charts": 6094,
+  "selected": 5101,
+  "generated": 5101,
+  "skipped_existing": 0,
+  "errors": 0,
+  "by_course": {
+    "Edit": 225,
+    "Hard": 2881,
+    "Normal": 2,
+    "Oni": 1993
+  },
+  "device": "cuda",
+  "model": "encoder_v1",
+  "checkpoint": "D:\\taiko\\taiko-diffusion\\checkpoints\\encoder_v1\\best.pt",
+  "elapsed_seconds": 32.06,
+  "error_samples": []
+}

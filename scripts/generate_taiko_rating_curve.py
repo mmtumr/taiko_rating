@@ -19,18 +19,18 @@ COLORS = {
 
 
 ANCHORS = [
-    (700_000, -2.0, "70w"),
-    (750_000, -1.0, "75w"),
-    (800_000, 0.0, "金雅 / S"),
-    (900_000, 0.5, "银粹 / AA"),
-    (950_000, 1.0, "粉雅 / SS"),
-    (980_000, 1.3, "紫雅 / SSS"),
-    (1_000_000, 1.5, "极 / SSS+"),
+    (700_000, -2.0, "过关 / 70w"),
+    (750_000, -1.0, "银粹 / 75w"),
+    (900_000, 0.5, "粉雅 / 90w"),
+    (950_000, 1.0, "紫雅 / 95w"),
+    (1_000_000, 1.5, "极 / 100w"),
 ]
 
 
 def bonus(score):
     score = max(0, min(score, 1_000_000))
+    if score < 700_000:
+        return None
     if score <= ANCHORS[0][0]:
         return ANCHORS[0][1]
     for (x1, y1, _), (x2, y2, _) in zip(ANCHORS, ANCHORS[1:]):
@@ -41,7 +41,8 @@ def bonus(score):
 
 
 def single_rating(score, const=10.5):
-    return const + bonus(score)
+    value = bonus(score)
+    return None if value is None else const + value
 
 
 class Plot:
@@ -94,7 +95,7 @@ def sample(plot, fn, step):
         if plot.xmin <= x <= plot.xmax:
             xs.append(x)
     xs = sorted({round(x, 3) for x in xs if plot.xmin <= x <= plot.xmax})
-    return [(plot.px(x), plot.py(fn(x))) for x in xs]
+    return [(plot.px(x), plot.py(y)) for x in xs if (y := fn(x)) is not None]
 
 
 def make_svg():
@@ -132,18 +133,18 @@ def make_svg():
         text(
             92,
             108,
-            "&#36825;&#26159;&#19968;&#26465;&#31867;&#20284; CHUNITHM &#30340;&#36830;&#32493;&#20998;&#27573;&#30452;&#32447;&#65306;80&#19975;/&#37329;&#38597;&#20316;&#20026;&#23450;&#25968;&#22522;&#20934;&#65292;100&#19975;/&#26497;&#21518;&#23553;&#39030;&#12290;",
+            "&#36825;&#26159;&#19968;&#26465;&#31867;&#20284; CHUNITHM &#30340;&#36830;&#32493;&#20998;&#27573;&#30452;&#32447;&#65306;70&#19975;&#36215;&#35745;&#65292;75&#19975;/&#38134;&#31929;&#12289;90&#19975;/&#31881;&#38597;&#12289;95&#19975;/&#32043;&#38597;&#12289;100&#19975;/&#26497;&#12290;",
             "small",
         )
     )
 
-    for y in [-2, -1, 0, 0.5, 1.0, 1.3, 1.5]:
+    for y in [-2, -1, 0, 0.5, 1.0, 1.5]:
         yy = main.py(y)
         out.append(line(main.x, yy, main.x + main.w, yy, COLORS["grid"]))
         label = f"{y:+g}"
         out.append(text(main.x - 14, yy + 5, label, "tick", "end"))
 
-    for x in [700_000, 750_000, 800_000, 900_000, 950_000, 980_000, 1_000_000]:
+    for x in [700_000, 750_000, 900_000, 950_000, 1_000_000]:
         xx = main.px(x)
         out.append(line(xx, main.y, xx, main.y + main.h, COLORS["grid_strong"]))
         label = f"{x // 10_000}w" if x < 1_000_000 else "100w"
@@ -152,7 +153,7 @@ def make_svg():
     out.append(line(main.x, main.y + main.h, main.x + main.w, main.y + main.h, COLORS["axis"], 2))
     out.append(line(main.x, main.y, main.x, main.y + main.h, COLORS["axis"], 2))
     out.append(
-        f'<rect x="{main.px(800000):.2f}" y="{main.y:.2f}" width="{main.px(1000000)-main.px(800000):.2f}" '
+        f'<rect x="{main.px(700000):.2f}" y="{main.y:.2f}" width="{main.px(1000000)-main.px(700000):.2f}" '
         f'height="{main.h:.2f}" fill="{COLORS["shade"]}" opacity="0.8"/>'
     )
     out.append(polyline(sample(main, bonus, 500), COLORS["line"], 4))
@@ -180,13 +181,15 @@ def make_svg():
         f'<rect x="{px}" y="{py}" width="{pw}" height="{ph}" rx="8" fill="{COLORS["panel"]}" stroke="{COLORS["panel_stroke"]}"/>'
     )
     out.append(text(px + 18, py + 32, "&#20363;&#65306;&#23450;&#25968; 10.5", "label"))
-    examples = [700_000, 750_000, 800_000, 900_000, 950_000, 980_000, 1_000_000]
+    examples = [650_000, 700_000, 750_000, 900_000, 950_000, 1_000_000]
     for i, score in enumerate(examples):
+        rating = single_rating(score)
+        result = "skip" if rating is None else f"{rating:.2f}"
         out.append(
             text(
                 px + 18,
                 py + 64 + i * 24,
-                f"{score // 10000:>3}w  ->  {single_rating(score):.2f}",
+                f"{score // 10000:>3}w  ->  {result}",
                 "mono",
             )
         )
@@ -197,7 +200,7 @@ def make_svg():
         yy = overview.py(y)
         out.append(line(overview.x, yy, overview.x + overview.w, yy, COLORS["grid"]))
         out.append(text(overview.x - 14, yy + 5, f"{y:+g}", "tick", "end"))
-    for x in [0, 500_000, 700_000, 750_000, 800_000, 900_000, 1_000_000]:
+    for x in [0, 500_000, 700_000, 750_000, 900_000, 950_000, 1_000_000]:
         xx = overview.px(x)
         out.append(line(xx, overview.y, xx, overview.y + overview.h, COLORS["grid"]))
         label = "0" if x == 0 else f"{x // 10_000}w"
@@ -214,7 +217,7 @@ def make_svg():
         text(
             92,
             882,
-            "&#35828;&#26126;&#65306;&#36825;&#26159; rank-based &#35843;&#21442;&#33609;&#26696;&#12290;80&#19975;/&#37329;&#38597;&#23545;&#24212;&#23450;&#25968;+0&#65292;100&#19975;/&#26497;&#23545;&#24212;&#23450;&#25968;+1.5&#12290;",
+            "&#35828;&#26126;&#65306;70&#19975;&#20197;&#19979;&#19981;&#35745;&#20837;&#37324;Rating&#65307;70&#19975;&#20026;&#36807;&#20851;(-2)&#65292;75&#19975;&#20026;&#38134;&#31929;(-1)&#65292;100&#19975;/&#26497;&#23545;&#24212;&#23450;&#25968;+1.5&#12290;",
             "small",
         )
     )

@@ -139,11 +139,46 @@ def should_keep_forced_duplicate(row: dict[str, str]) -> bool:
     return True
 
 
-def make_record(row: dict[str, str], excel_row: dict[str, str] | None) -> dict[str, Any]:
+def encoder_stats(stats_by_id: dict[str, Any], record_id: str) -> dict[str, Any] | None:
+    stats = stats_by_id.get(record_id)
+    if not isinstance(stats, dict):
+        return None
+    if stats.get("const") is None:
+        return None
+    encoder = stats.get("encoder") if isinstance(stats.get("encoder"), dict) else {}
+    if encoder and encoder.get("status") not in {None, "ok"}:
+        return None
+    features = stats.get("features") or {}
+    return {
+        "const": as_float(stats.get("const")),
+        "combo": as_int(stats.get("combo")),
+        "features": {
+            "complex": as_float(features.get("complex")),
+            "avg_density": as_float(features.get("avg_density")),
+            "peak_density": as_float(features.get("peak_density")),
+            "note_type": as_float(features.get("note_type")),
+            "bpm_change": as_float(features.get("bpm_change")),
+            "hs_change": as_float(features.get("hs_change")),
+            "rhythm": as_float(features.get("rhythm")),
+        },
+        "roll_time": stats.get("roll_time") or None,
+        "roll_time_seconds": as_float(stats.get("roll_time_seconds")),
+        "balloon_num": as_int(stats.get("balloon_num"), 0),
+        "encoder": stats.get("encoder"),
+    }
+
+
+def make_record(
+    row: dict[str, str],
+    excel_row: dict[str, str] | None,
+    encoder_stats_by_id: dict[str, Any],
+) -> dict[str, Any]:
     course = clean_course(row.get("course", ""))
     course_level = COURSE_LEVEL.get(course.casefold())
-    source = "excel" if excel_row is not None else "encoder_pending"
-    stats = excel_stats(excel_row) if excel_row is not None else {
+    record_id = f"ese:{row.get('path')}::{course}"
+    generated_stats = None if excel_row is not None else encoder_stats(encoder_stats_by_id, record_id)
+    source = "excel" if excel_row is not None else ("encoder" if generated_stats is not None else "encoder_pending")
+    stats = excel_stats(excel_row) if excel_row is not None else generated_stats or {
         "const": None,
         "combo": as_int(row.get("note_count")),
         "features": {
@@ -165,7 +200,7 @@ def make_record(row: dict[str, str], excel_row: dict[str, str] | None) -> dict[s
         if value and value != title
     ]
     return {
-        "id": f"ese:{row.get('path')}::{course}",
+        "id": record_id,
         "title": title,
         "aliases": aliases,
         "title_normalized": normalize_title(title),
@@ -184,7 +219,7 @@ def make_record(row: dict[str, str], excel_row: dict[str, str] | None) -> dict[s
         },
         **stats,
         "source": source,
-        "needs_encoder": excel_row is None,
+        "needs_encoder": excel_row is None and generated_stats is None,
         "force_included": is_forced_normal(row),
         "review": {
             "matched_combo_delta": as_int(excel_row.get("combo_delta")) if excel_row else None,
@@ -193,7 +228,11 @@ def make_record(row: dict[str, str], excel_row: dict[str, str] | None) -> dict[s
     }
 
 
-def build_chart_data(ese_rows: list[dict[str, str]], excel_by_course: dict[tuple[str, str], dict[str, str]]) -> list[dict[str, Any]]:
+def build_chart_data(
+    ese_rows: list[dict[str, str]],
+    excel_by_course: dict[tuple[str, str], dict[str, str]],
+    encoder_stats_by_id: dict[str, Any],
+) -> list[dict[str, Any]]:
     records: list[dict[str, Any]] = []
     seen: set[tuple[str, str]] = set()
     for row in ese_rows:
@@ -208,7 +247,7 @@ def build_chart_data(ese_rows: list[dict[str, str]], excel_by_course: dict[tuple
             continue
         seen.add(key)
         excel_row = excel_by_course.get(key)
-        records.append(make_record(row, excel_row))
+        records.append(make_record(row, excel_row, encoder_stats_by_id))
 
     records.sort(key=lambda item: (item["course"] != "Edit", item["course"] != "Oni", item["course"] != "Hard", item["title"]))
     return records
@@ -242,14 +281,18 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Build static Taiko chart data for the rating frontend.")
     parser.add_argument("--ese-courses", type=Path, default=Path("../taiko_encoder_out/ese_courses.csv"))
     parser.add_argument("--strict-matched", type=Path, default=Path("../taiko_encoder_out/strict_matched_dataset.csv"))
+    parser.add_argument("--encoder-stats", type=Path, default=Path("data/encoder_chart_stats.json"))
     parser.add_argument("--output", type=Path, default=Path("data/chart_data.json"))
     parser.add_argument("--summary", type=Path, default=Path("data/chart_data_summary.json"))
     args = parser.parse_args()
 
     ese_rows = read_csv(args.ese_courses)
     strict_rows = read_csv(args.strict_matched)
+    encoder_stats_by_id: dict[str, Any] = {}
+    if args.encoder_stats.exists():
+        encoder_stats_by_id = json.loads(args.encoder_stats.read_text(encoding="utf-8"))
     excel_by_course = build_excel_by_course(strict_rows)
-    records = build_chart_data(ese_rows, excel_by_course)
+    records = build_chart_data(ese_rows, excel_by_course, encoder_stats_by_id)
     summary = summarize(records)
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
