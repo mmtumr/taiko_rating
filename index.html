@@ -8,15 +8,23 @@
   </head>
   <body>
     <main class="app-shell">
-      <section class="workspace">
-        <div class="topbar">
-          <div>
-            <h1>Taiko Rating</h1>
-            <p>定数 + 分数补正 / Best N</p>
-          </div>
+      <header class="topbar">
+        <div>
+          <h1>Taiko Rating</h1>
+          <p>表 / 里 Rating · B20</p>
+        </div>
+        <div class="topbar-actions">
+          <label class="toggle-line">
+            <input id="useEncoderInput" type="checkbox" checked />
+            使用 encoder 数据
+          </label>
           <div class="summary-strip">
             <div>
-              <span>TR</span>
+              <span>表 Rating</span>
+              <strong id="classicRatingValue">--</strong>
+            </div>
+            <div>
+              <span>里 Rating</span>
               <strong id="ratingValue">--</strong>
             </div>
             <div>
@@ -29,88 +37,180 @@
             </div>
           </div>
         </div>
+      </header>
 
+      <nav class="page-tabs" aria-label="页面">
+        <button class="is-active" type="button" data-page-target="ratingPage">Rating 系统</button>
+        <button type="button" data-page-target="dataPage">谱面数据</button>
+      </nav>
+
+      <section id="ratingPage" class="page-panel is-active">
+        <div class="rating-layout">
+          <section class="workspace">
+            <section class="panel">
+              <div class="panel-head">
+                <h2>玩家数据</h2>
+                <button id="fetchButton" type="button">获取成绩</button>
+              </div>
+              <div class="form-grid">
+                <label>
+                  API Key
+                  <input id="apiKeyInput" type="password" autocomplete="off" placeholder="tk_xxx" />
+                </label>
+                <label>
+                  Player ID
+                  <input id="playerIdInput" type="text" inputmode="numeric" placeholder="可留空" />
+                </label>
+                <label>
+                  接口
+                  <select id="endpointSelect">
+                    <option value="kinoko">kinoko 历史成绩</option>
+                    <option value="hiroba">hiroba 最新成绩</option>
+                  </select>
+                </label>
+              </div>
+              <p id="fetchStatus" class="status-line"></p>
+            </section>
+
+            <section class="panel">
+              <div class="panel-head">
+                <h2>谱面库</h2>
+              </div>
+              <p id="constantsStatus" class="status-line"></p>
+            </section>
+
+            <section class="panel">
+              <div class="panel-head">
+                <h2>Rating B20</h2>
+                <div class="button-row">
+                  <button id="recalculateButton" type="button">计算</button>
+                  <button id="exportButton" type="button">导出 PNG</button>
+                </div>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>对象</th>
+                      <th>曲名</th>
+                      <th>难度</th>
+                      <th>来源</th>
+                      <th>定数</th>
+                      <th>分数</th>
+                      <th>补正</th>
+                      <th>单曲里R</th>
+                    </tr>
+                  </thead>
+                  <tbody id="ratingTableBody">
+                    <tr>
+                      <td colspan="9" class="empty-cell">等待数据</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-head">
+                <h2>单曲详情</h2>
+              </div>
+              <div id="ratingDetail" class="detail-panel muted-box">点击 Rating 表中的歌曲查看详细数值</div>
+            </section>
+          </section>
+
+          <aside class="preview">
+            <div class="preview-head">
+              <h2>图片预览</h2>
+              <span id="imageStatus">未生成</span>
+            </div>
+            <canvas id="ratingCanvas" width="1440" height="1900"></canvas>
+          </aside>
+        </div>
+      </section>
+
+      <section id="dataPage" class="page-panel">
         <section class="panel">
           <div class="panel-head">
-            <h2>玩家数据</h2>
-            <button id="fetchButton" type="button">获取成绩</button>
+            <h2>谱面数据筛选</h2>
+            <div class="button-row">
+              <button id="addFilterButton" type="button">新增筛选</button>
+              <button id="clearFiltersButton" type="button">清空筛选</button>
+            </div>
           </div>
-          <div class="form-grid">
+          <div class="data-controls">
             <label>
-              API Key
-              <input id="apiKeyInput" type="password" autocomplete="off" placeholder="tk_xxx" />
+              搜索曲名
+              <input id="chartSearchInput" type="search" placeholder="曲名 / 别名 / id" />
             </label>
             <label>
-              Player ID
-              <input id="playerIdInput" type="text" inputmode="numeric" placeholder="可留空" />
-            </label>
-            <label>
-              接口
-              <select id="endpointSelect">
-                <option value="kinoko">kinoko 历史成绩</option>
-                <option value="hiroba">hiroba 最新成绩</option>
+              难度
+              <select id="chartCourseSelect">
+                <option value="">全部</option>
+                <option value="Normal">竹</option>
+                <option value="Hard">松</option>
+                <option value="Oni">魔王</option>
+                <option value="Edit">里魔王</option>
               </select>
             </label>
             <label>
-              Best N
-              <input id="bestNInput" type="number" min="1" max="100" step="1" value="30" />
+              排序字段
+              <select id="chartSortField"></select>
+            </label>
+            <label>
+              方向
+              <select id="chartSortDir">
+                <option value="desc">降序</option>
+                <option value="asc">升序</option>
+              </select>
             </label>
           </div>
-          <p id="fetchStatus" class="status-line"></p>
+          <div id="filterRows" class="filter-rows"></div>
+          <p id="chartBrowserStatus" class="status-line"></p>
         </section>
 
         <section class="panel">
           <div class="panel-head">
-            <h2>谱面定数</h2>
-            <div class="button-row">
-              <button id="loadSampleButton" type="button">示例</button>
-              <button id="applyConstantsButton" type="button">应用</button>
-            </div>
-          </div>
-          <textarea id="constantsInput" spellcheck="false" placeholder="song_no,level,const,title&#10;938,4,10.4,零之交响曲&#10;72,2,6.0,The Carnivorous Carnival"></textarea>
-          <p id="constantsStatus" class="status-line"></p>
-        </section>
-
-        <section class="panel">
-          <div class="panel-head">
-            <h2>Rating</h2>
-            <div class="button-row">
-              <button id="recalculateButton" type="button">计算</button>
-              <button id="exportButton" type="button">导出 PNG</button>
-            </div>
+            <h2>谱面列表</h2>
+            <span id="chartResultCount" class="status-line"></span>
           </div>
           <div class="table-wrap">
-            <table>
+            <table class="data-table">
               <thead>
                 <tr>
-                  <th>#</th>
                   <th>曲名</th>
                   <th>难度</th>
+                  <th>星级</th>
                   <th>定数</th>
-                  <th>分数</th>
-                  <th>补正</th>
-                  <th>单曲TR</th>
+                  <th>combo</th>
+                  <th>复合</th>
+                  <th>平均密度</th>
+                  <th>瞬间密度</th>
+                  <th>叩き分け</th>
+                  <th>BPM变化</th>
+                  <th>HS变化</th>
+                  <th>来源</th>
                 </tr>
               </thead>
-              <tbody id="ratingTableBody">
+              <tbody id="chartTableBody">
                 <tr>
-                  <td colspan="7" class="empty-cell">等待数据</td>
+                  <td colspan="12" class="empty-cell">谱面库加载中</td>
                 </tr>
               </tbody>
             </table>
           </div>
         </section>
-      </section>
 
-      <aside class="preview">
-        <div class="preview-head">
-          <h2>图片预览</h2>
-          <span id="imageStatus">未生成</span>
-        </div>
-        <canvas id="ratingCanvas" width="1080" height="1440"></canvas>
-      </aside>
+        <section class="panel">
+          <div class="panel-head">
+            <h2>谱面详情</h2>
+          </div>
+          <div id="chartDetail" class="detail-panel muted-box">点击谱面列表中的行查看 JSON 数据</div>
+        </section>
+      </section>
     </main>
 
+    <script src="rating_image.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

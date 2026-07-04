@@ -1,33 +1,81 @@
 const API_BASE = "https://kinoko.zorua.cn/api/v1";
+const RATING_BEST_COUNT = 20;
+const CHART_RENDER_LIMIT = 800;
+
+const FIELD_DEFS = [
+  { key: "title", label: "曲名", type: "text" },
+  { key: "course", label: "难度", type: "text" },
+  { key: "level", label: "星级", type: "number" },
+  { key: "const", label: "定数", type: "number" },
+  { key: "combo", label: "combo", type: "number" },
+  { key: "complex", label: "复合处理", type: "number" },
+  { key: "avg_density", label: "平均密度", type: "number" },
+  { key: "peak_density", label: "瞬间密度", type: "number" },
+  { key: "note_type", label: "叩き分け", type: "number" },
+  { key: "bpm_change", label: "BPM变化", type: "number" },
+  { key: "hs_change", label: "HS变化", type: "number" },
+  { key: "rhythm", label: "节奏处理", type: "number" },
+  { key: "roll_time", label: "连打时长", type: "text" },
+  { key: "balloon_num", label: "气球数", type: "number" },
+  { key: "source", label: "来源", type: "text" },
+];
+
+const FILTER_OPS = [
+  { value: "contains", label: "包含" },
+  { value: "=", label: "=" },
+  { value: "!=", label: "!=" },
+  { value: ">=", label: ">=" },
+  { value: "<=", label: "<=" },
+  { value: ">", label: ">" },
+  { value: "<", label: "<" },
+  { value: "empty", label: "为空" },
+  { value: "not_empty", label: "非空" },
+];
 
 const state = {
   records: [],
   chartData: [],
-  constantsBySong: new Map(),
   constantsByTitle: new Map(),
-  manualConstants: new Map(),
   rated: [],
+  ratingBest: [],
+  ratingObjects: [],
+  selectedRatingIndex: null,
+  chartBrowserRows: [],
+  selectedChartIndex: null,
+  chartFilters: [],
 };
 
 const els = {
+  useEncoderInput: document.getElementById("useEncoderInput"),
   apiKeyInput: document.getElementById("apiKeyInput"),
   playerIdInput: document.getElementById("playerIdInput"),
   endpointSelect: document.getElementById("endpointSelect"),
-  bestNInput: document.getElementById("bestNInput"),
   fetchButton: document.getElementById("fetchButton"),
   fetchStatus: document.getElementById("fetchStatus"),
-  constantsInput: document.getElementById("constantsInput"),
   constantsStatus: document.getElementById("constantsStatus"),
-  loadSampleButton: document.getElementById("loadSampleButton"),
-  applyConstantsButton: document.getElementById("applyConstantsButton"),
   recalculateButton: document.getElementById("recalculateButton"),
   exportButton: document.getElementById("exportButton"),
+  classicRatingValue: document.getElementById("classicRatingValue"),
   ratingValue: document.getElementById("ratingValue"),
   recordCount: document.getElementById("recordCount"),
   matchedCount: document.getElementById("matchedCount"),
   tableBody: document.getElementById("ratingTableBody"),
+  ratingDetail: document.getElementById("ratingDetail"),
   canvas: document.getElementById("ratingCanvas"),
   imageStatus: document.getElementById("imageStatus"),
+  pageTabs: document.querySelectorAll("[data-page-target]"),
+  pages: document.querySelectorAll(".page-panel"),
+  chartSearchInput: document.getElementById("chartSearchInput"),
+  chartCourseSelect: document.getElementById("chartCourseSelect"),
+  chartSortField: document.getElementById("chartSortField"),
+  chartSortDir: document.getElementById("chartSortDir"),
+  addFilterButton: document.getElementById("addFilterButton"),
+  clearFiltersButton: document.getElementById("clearFiltersButton"),
+  filterRows: document.getElementById("filterRows"),
+  chartBrowserStatus: document.getElementById("chartBrowserStatus"),
+  chartResultCount: document.getElementById("chartResultCount"),
+  chartTableBody: document.getElementById("chartTableBody"),
+  chartDetail: document.getElementById("chartDetail"),
 };
 
 function chartKey(songNo, level) {
@@ -60,6 +108,16 @@ function levelName(level) {
   }[String(level)] ?? String(level);
 }
 
+function sourceLabel(source, needsEncoder = false) {
+  if (source === "excel") return "xlsx";
+  if (needsEncoder) return "encoder待生成";
+  return source || "encoder";
+}
+
+function sourceClass(source) {
+  return source === "excel" ? "excel" : "encoder";
+}
+
 function scoreBonus(score) {
   const rate = Math.max(0, Math.min(Number(score) / 1_000_000, 1));
   const anchors = [
@@ -84,89 +142,63 @@ function scoreBonus(score) {
   return anchors[anchors.length - 1][1];
 }
 
+function getUseEncoder() {
+  return Boolean(els.useEncoderInput.checked);
+}
+
+function chartAllowedBySource(chart) {
+  return getUseEncoder() || chart.source === "excel";
+}
+
+function hasNumericValue(value) {
+  return value !== null && value !== undefined && value !== "" && Number.isFinite(Number(value));
+}
+
+function chartUsableForRating(chart) {
+  const scoreLevel = Number(chart.score_level);
+  return chartAllowedBySource(chart) && Number.isFinite(scoreLevel) && hasNumericValue(chart.const);
+}
+
 function formatScore(value) {
   return Number(value || 0).toLocaleString("en-US");
 }
 
-function parseCsvLine(line) {
-  const cells = [];
-  let current = "";
-  let quoted = false;
-
-  for (let i = 0; i < line.length; i += 1) {
-    const ch = line[i];
-    if (ch === '"' && line[i + 1] === '"') {
-      current += '"';
-      i += 1;
-    } else if (ch === '"') {
-      quoted = !quoted;
-    } else if (ch === "," && !quoted) {
-      cells.push(current.trim());
-      current = "";
-    } else {
-      current += ch;
-    }
-  }
-  cells.push(current.trim());
-  return cells;
+function formatNumber(value, digits = 2) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number.toFixed(digits) : "--";
 }
 
-function parseConstants(text) {
-  const map = new Map();
-  const lines = text
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean);
-
-  for (const line of lines) {
-    if (/^song_no\s*,/i.test(line)) continue;
-    const [songNo, level, constant, title = ""] = parseCsvLine(line);
-    const song = Number(songNo);
-    const diff = Number(level);
-    const chartConstant = Number(constant);
-    if (!Number.isFinite(song) || !Number.isFinite(diff) || !Number.isFinite(chartConstant)) {
-      continue;
-    }
-    map.set(chartKey(song, diff), {
-      songNo: song,
-      level: diff,
-      constant: chartConstant,
-      title,
-    });
-  }
-
-  return map;
+function formatLoose(value, digits = 2) {
+  if (value == null || value === "") return "--";
+  const number = Number(value);
+  return Number.isFinite(number) ? number.toFixed(digits) : String(value);
 }
 
-function indexManualConstants() {
-  for (const item of state.manualConstants.values()) {
-    const chart = {
-      title: item.title,
-      aliases: [],
-      const: item.constant,
-      combo: null,
-      source: "manual",
-      needs_encoder: false,
-    };
-    state.constantsBySong.set(chartKey(item.songNo, item.level), chart);
-    if (item.title) {
-      state.constantsByTitle.set(titleKey(item.title, item.level), chart);
-    }
-  }
+function percent(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? `${(number * 100).toFixed(2)}%` : "--";
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
 
 function indexChartData(charts) {
-  state.constantsBySong.clear();
   state.constantsByTitle.clear();
   for (const chart of charts) {
+    if (!chartUsableForRating(chart)) continue;
     const scoreLevel = Number(chart.score_level);
-    if (!Number.isFinite(scoreLevel) || chart.const == null) continue;
     const indexed = {
       title: chart.title,
       aliases: chart.aliases || [],
       const: Number(chart.const),
       combo: chart.combo,
-      features: chart.features,
+      features: chart.features || {},
       source: chart.source,
       needs_encoder: Boolean(chart.needs_encoder),
       raw: chart,
@@ -176,7 +208,14 @@ function indexChartData(charts) {
       state.constantsByTitle.set(titleKey(name, scoreLevel), indexed);
     }
   }
-  indexManualConstants();
+}
+
+function updateChartStatus() {
+  const included = state.chartData.filter(chartAllowedBySource);
+  const excelCount = included.filter((chart) => chart.source === "excel").length;
+  const encoderCount = included.length - excelCount;
+  const usableCount = included.filter((chart) => hasNumericValue(chart.const)).length;
+  els.constantsStatus.textContent = `当前启用 ${included.length} 张谱面：xlsx ${excelCount}，encoder ${encoderCount}，可用于 Rating ${usableCount}`;
 }
 
 async function loadChartData() {
@@ -186,18 +225,16 @@ async function loadChartData() {
     const charts = await resp.json();
     state.chartData = Array.isArray(charts) ? charts : [];
     indexChartData(state.chartData);
-    const excelCount = state.chartData.filter((chart) => chart.source === "excel").length;
-    const pendingCount = state.chartData.filter((chart) => chart.needs_encoder).length;
-    els.constantsStatus.textContent = `已载入 ${state.chartData.length} 张谱面：Excel ${excelCount}，待 encoder ${pendingCount}`;
+    updateChartStatus();
+    renderChartBrowser();
     calculateRating();
   } catch (err) {
     els.constantsStatus.textContent = `谱面库未载入：${err instanceof Error ? err.message : "未知错误"}`;
+    els.chartBrowserStatus.textContent = "谱面库未载入";
   }
 }
 
 function findChart(record) {
-  const direct = state.constantsBySong.get(chartKey(record.songNo, record.level));
-  if (direct) return direct;
   const titleCandidates = [
     record.title,
     record.titleJp,
@@ -273,8 +310,8 @@ function pickBestRecords(records) {
 }
 
 function calculateRating() {
-  const bestN = Math.max(1, Math.min(Number(els.bestNInput.value) || 30, 100));
-  const rated = pickBestRecords(state.records)
+  const bestRecords = pickBestRecords(state.records);
+  const rated = bestRecords
     .map((record) => {
       const chart = findChart(record);
       if (!chart) return null;
@@ -282,10 +319,13 @@ function calculateRating() {
       const single = chart.const + bonus;
       return {
         ...record,
+        chart,
         constant: chart.const,
         constantTitle: chart.title,
         chartSource: chart.source,
         needsEncoder: chart.needs_encoder,
+        chartCombo: chart.combo,
+        features: chart.features || {},
         bonus,
         single,
       };
@@ -294,162 +334,106 @@ function calculateRating() {
     .sort((a, b) => b.single - a.single || b.highScore - a.highScore);
 
   state.rated = rated;
-  const best = rated.slice(0, bestN);
-  const total = best.length ? best.reduce((sum, item) => sum + item.single, 0) / best.length : 0;
+  state.ratingBest = rated.slice(0, RATING_BEST_COUNT);
+  const classicBest = window.TaikoRatingImage?.calculateClassicMetrics?.(rated)?.b20 || [];
+  state.ratingObjects = [
+    ...state.ratingBest.map((row) => ({ mode: "里", row, displaySingle: row.single })),
+    ...classicBest.map((row) => ({ mode: "表", row, displaySingle: row.classicSingle })),
+  ];
+  if (!state.ratingObjects.length) state.selectedRatingIndex = null;
+  else if (state.selectedRatingIndex == null || state.selectedRatingIndex >= state.ratingObjects.length) state.selectedRatingIndex = 0;
 
-  els.ratingValue.textContent = best.length ? total.toFixed(2) : "--";
-  els.recordCount.textContent = String(pickBestRecords(state.records).length);
+  els.recordCount.textContent = String(bestRecords.length);
   els.matchedCount.textContent = String(rated.length);
-  renderTable(best);
-  renderCanvas(best, total, bestN);
+  renderRatingTable();
+  renderRatingDetail(state.selectedRatingIndex == null ? null : state.ratingObjects[state.selectedRatingIndex]);
+  renderCanvas(rated);
 }
 
-function renderTable(rows) {
+function renderRatingTable() {
+  const rows = state.ratingObjects;
   if (!rows.length) {
-    els.tableBody.innerHTML = '<tr><td colspan="7" class="empty-cell">没有可计算成绩</td></tr>';
+    els.tableBody.innerHTML = '<tr><td colspan="9" class="empty-cell">没有可计算成绩</td></tr>';
     return;
   }
 
   els.tableBody.innerHTML = rows
     .map(
-      (row, index) => `
-        <tr>
+      (item, index) => {
+        const row = item.row;
+        const modeClass = item.mode === "表" ? "excel" : "encoder";
+        return `
+        <tr class="clickable-row ${state.selectedRatingIndex === index ? "is-selected" : ""}" data-rating-index="${index}">
           <td>${index + 1}</td>
+          <td><span class="source-badge ${modeClass}">${item.mode}R</span></td>
           <td>${escapeHtml(row.title)}</td>
           <td><span class="level-badge">${levelName(row.level)}</span></td>
-          <td>${row.constant.toFixed(1)}</td>
-          <td>${formatScore(row.highScore)}</td>
-          <td>${row.bonus >= 0 ? "+" : ""}${row.bonus.toFixed(2)}</td>
-          <td>${row.single.toFixed(2)}</td>
+          <td><span class="source-badge ${sourceClass(row.chartSource)}">${sourceLabel(row.chartSource, row.needsEncoder)}</span></td>
+          <td class="numeric">${row.constant.toFixed(1)}</td>
+          <td class="numeric">${formatScore(row.highScore)}</td>
+          <td class="numeric">${row.bonus >= 0 ? "+" : ""}${row.bonus.toFixed(2)}</td>
+          <td class="numeric">${item.displaySingle.toFixed(2)}</td>
         </tr>
-      `,
+      `;
+      },
     )
     .join("");
 }
 
-function escapeHtml(value) {
-  return String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
-
-function drawText(ctx, textValue, x, y, options = {}) {
-  const {
-    size = 28,
-    weight = "400",
-    color = "#25211e",
-    align = "left",
-    baseline = "alphabetic",
-  } = options;
-  ctx.font = `${weight} ${size}px "Microsoft YaHei", "Segoe UI", Arial, sans-serif`;
-  ctx.fillStyle = color;
-  ctx.textAlign = align;
-  ctx.textBaseline = baseline;
-  ctx.fillText(textValue, x, y);
-}
-
-function trimText(ctx, value, maxWidth) {
-  const textValue = String(value);
-  if (ctx.measureText(textValue).width <= maxWidth) return textValue;
-  let out = textValue;
-  while (out.length > 1 && ctx.measureText(`${out}...`).width > maxWidth) {
-    out = out.slice(0, -1);
-  }
-  return `${out}...`;
-}
-
-function renderCanvas(rows, rating, bestN) {
-  const canvas = els.canvas;
-  const ctx = canvas.getContext("2d");
-  const w = canvas.width;
-  const h = canvas.height;
-
-  ctx.clearRect(0, 0, w, h);
-  ctx.fillStyle = "#fbfaf7";
-  ctx.fillRect(0, 0, w, h);
-
-  drawText(ctx, "Taiko Rating", 64, 92, { size: 52, weight: "700" });
-  drawText(ctx, `Best ${bestN} / ${new Date().toLocaleDateString("zh-CN")}`, 64, 132, {
-    size: 24,
-    color: "#6d645c",
-  });
-
-  ctx.fillStyle = "#25211e";
-  roundRect(ctx, 760, 52, 256, 112, 16);
-  ctx.fill();
-  drawText(ctx, rows.length ? rating.toFixed(2) : "--", 888, 103, {
-    size: 42,
-    weight: "700",
-    color: "#ffffff",
-    align: "center",
-    baseline: "middle",
-  });
-  drawText(ctx, "TR", 888, 138, {
-    size: 22,
-    color: "#d8d0c7",
-    align: "center",
-    baseline: "middle",
-  });
-
-  const listTop = 210;
-  const rowH = 48;
-  drawText(ctx, "#", 64, listTop - 22, { size: 20, weight: "700", color: "#6d645c" });
-  drawText(ctx, "曲名", 122, listTop - 22, { size: 20, weight: "700", color: "#6d645c" });
-  drawText(ctx, "定数", 662, listTop - 22, { size: 20, weight: "700", color: "#6d645c" });
-  drawText(ctx, "分数", 766, listTop - 22, { size: 20, weight: "700", color: "#6d645c" });
-  drawText(ctx, "TR", 970, listTop - 22, { size: 20, weight: "700", color: "#6d645c" });
-
-  if (!rows.length) {
-    drawText(ctx, "等待成绩和定数", w / 2, h / 2, {
-      size: 34,
-      weight: "700",
-      color: "#6d645c",
-      align: "center",
-      baseline: "middle",
-    });
+function renderRatingDetail(item) {
+  if (!item) {
+    els.ratingDetail.className = "detail-panel muted-box";
+    els.ratingDetail.textContent = "点击 Rating 表中的歌曲查看详细数值";
+    return;
   }
 
-  rows.slice(0, 24).forEach((row, index) => {
-    const y = listTop + index * rowH;
-    ctx.fillStyle = index % 2 === 0 ? "#ffffff" : "#f0f6f8";
-    roundRect(ctx, 54, y - 30, 972, 40, 8);
-    ctx.fill();
-    drawText(ctx, String(index + 1).padStart(2, "0"), 76, y - 4, {
-      size: 20,
-      weight: "700",
-      color: "#c84632",
-    });
-    drawText(ctx, trimText(ctx, row.title, 470), 122, y - 4, { size: 22, weight: "600" });
-    drawText(ctx, levelName(row.level), 600, y - 4, { size: 18, color: "#6d645c" });
-    drawText(ctx, row.constant.toFixed(1), 680, y - 4, { size: 20, weight: "700" });
-    drawText(ctx, formatScore(row.highScore), 766, y - 4, { size: 20, color: "#6d645c" });
-    drawText(ctx, row.single.toFixed(2), 970, y - 4, {
-      size: 22,
-      weight: "700",
-      color: "#2d719d",
-      align: "right",
-    });
-  });
+  const row = item.row;
+  const classic = window.TaikoRatingImage?.calculateClassicSingle?.(row);
+  const noteTotal = Number(row.good) + Number(row.ok) + Number(row.ng);
+  const goodRate = noteTotal > 0 ? row.good / noteTotal : null;
+  const dims = classic?.dimensions || {};
+  const f = row.features || {};
+  const items = [
+    ["Rating对象", `${item.mode} Rating B20`],
+    ["曲名", row.title],
+    ["匹配谱面", row.constantTitle],
+    ["难度", levelName(row.level)],
+    ["来源", sourceLabel(row.chartSource, row.needsEncoder)],
+    ["定数", row.constant.toFixed(1)],
+    ["分数", formatScore(row.highScore)],
+    ["良 / 可 / 不可", `${row.good} / ${row.ok} / ${row.ng}`],
+    ["良率", percent(goodRate)],
+    ["分数补正", `${row.bonus >= 0 ? "+" : ""}${row.bonus.toFixed(2)}`],
+    ["当前单曲R", item.displaySingle.toFixed(2)],
+    ["单曲里R", row.single.toFixed(2)],
+    ["单曲表R", classic ? classic.classicSingle.toFixed(2) : "--"],
+    ["定数得点 x", classic ? classic.x.toFixed(2) : "--"],
+    ["良率表现 y", classic ? classic.y.toFixed(2) : "--"],
+    ["大歌力", formatNumber(dims.power)],
+    ["体力", formatNumber(dims.stamina)],
+    ["高速力", formatNumber(dims.speed)],
+    ["精度力", formatNumber(dims.accuracy)],
+    ["节奏处理", formatNumber(dims.rhythm)],
+    ["复合处理", formatNumber(dims.complex)],
+    ["平均密度", formatLoose(f.avg_density)],
+    ["瞬间密度", formatLoose(f.peak_density)],
+    ["BPM变化", formatLoose(f.bpm_change)],
+    ["HS变化", formatLoose(f.hs_change)],
+    ["combo", formatLoose(row.chartCombo, 0)],
+  ];
 
-  drawText(ctx, "score bonus caps at 1,000,000", 64, h - 64, {
-    size: 20,
-    color: "#6d645c",
-  });
-  els.imageStatus.textContent = rows.length ? "已生成" : "未生成";
+  els.ratingDetail.className = "detail-panel";
+  els.ratingDetail.innerHTML = `<div class="detail-grid">${items
+    .map(([label, value]) => `<div class="detail-item"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`)
+    .join("")}</div>`;
 }
 
-function roundRect(ctx, x, y, width, height, radius) {
-  const r = Math.min(radius, width / 2, height / 2);
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + width, y, x + width, y + height, r);
-  ctx.arcTo(x + width, y + height, x, y + height, r);
-  ctx.arcTo(x, y + height, x, y, r);
-  ctx.arcTo(x, y, x + width, y, r);
-  ctx.closePath();
+function renderCanvas(allRows) {
+  if (!window.TaikoRatingImage) return;
+  const metrics = window.TaikoRatingImage.renderRatingImage(els.canvas, { allRows });
+  els.classicRatingValue.textContent = metrics.classic.rating ? metrics.classic.rating.toFixed(2) : "--";
+  els.ratingValue.textContent = metrics.ura.rating ? metrics.ura.rating.toFixed(2) : "--";
+  els.imageStatus.textContent = allRows.length ? "已生成" : "未生成";
 }
 
 async function fetchScores() {
@@ -478,6 +462,7 @@ async function fetchScores() {
       throw new Error(payload.detail || `HTTP ${resp.status}`);
     }
     state.records = normalizeApiResponse(payload, endpoint);
+    state.selectedRatingIndex = null;
     els.fetchStatus.textContent = `已获取 ${state.records.length} 条记录`;
     calculateRating();
   } catch (err) {
@@ -487,23 +472,238 @@ async function fetchScores() {
   }
 }
 
-function applyConstants() {
-  state.manualConstants = parseConstants(els.constantsInput.value);
-  indexChartData(state.chartData);
-  els.constantsStatus.textContent = `已应用 ${state.manualConstants.size} 条手动定数覆盖`;
-  calculateRating();
+function getChartValue(chart, field) {
+  const f = chart.features || {};
+  const values = {
+    title: chart.title,
+    course: chart.course,
+    level: chart.level,
+    const: chart.const,
+    combo: chart.combo,
+    complex: f.complex,
+    avg_density: f.avg_density,
+    peak_density: f.peak_density,
+    note_type: f.note_type,
+    bpm_change: f.bpm_change,
+    hs_change: f.hs_change,
+    rhythm: f.rhythm,
+    roll_time: chart.roll_time,
+    balloon_num: chart.balloon_num,
+    source: sourceLabel(chart.source, chart.needs_encoder),
+  };
+  return values[field];
 }
 
-function loadSampleConstants() {
-  els.constantsInput.value = [
-    "song_no,level,const,title",
-    "938,4,10.4,零之交响曲",
-    "72,2,6.0,The Carnivorous Carnival",
-    "1172,4,11.6,Destination 2F29",
-    "1043,5,11.6,憎悪と醜悪の花束(裏)",
-    "993,5,11.6,彁(裏)",
-  ].join("\n");
-  applyConstants();
+function getChartSearchText(chart) {
+  return [chart.id, chart.title, chart.title_normalized, chart.course, chart.course_label, ...(chart.aliases || [])]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
+
+function matchesFilter(chart, filter) {
+  if (!filter || !filter.field || !filter.op) return true;
+  const raw = getChartValue(chart, filter.field);
+  const op = filter.op;
+  if (op === "empty") return raw == null || raw === "";
+  if (op === "not_empty") return raw != null && raw !== "";
+  if (filter.value == null || filter.value === "") return true;
+
+  const def = FIELD_DEFS.find((item) => item.key === filter.field);
+  if (def?.type === "number" && op !== "contains") {
+    const left = Number(raw);
+    const right = Number(filter.value);
+    if (!Number.isFinite(left) || !Number.isFinite(right)) return false;
+    if (op === "=") return left === right;
+    if (op === "!=") return left !== right;
+    if (op === ">=") return left >= right;
+    if (op === "<=") return left <= right;
+    if (op === ">") return left > right;
+    if (op === "<") return left < right;
+    return true;
+  }
+
+  const left = String(raw ?? "").toLowerCase();
+  const right = String(filter.value).toLowerCase();
+  if (op === "contains") return left.includes(right);
+  if (op === "=") return left === right;
+  if (op === "!=") return left !== right;
+  return true;
+}
+
+function sortCharts(rows) {
+  const field = els.chartSortField.value || "const";
+  const dir = els.chartSortDir.value === "asc" ? 1 : -1;
+  const def = FIELD_DEFS.find((item) => item.key === field);
+  return [...rows].sort((a, b) => {
+    const av = getChartValue(a, field);
+    const bv = getChartValue(b, field);
+    if (def?.type === "number") {
+      const an = Number(av);
+      const bn = Number(bv);
+      const aValid = Number.isFinite(an);
+      const bValid = Number.isFinite(bn);
+      if (aValid && bValid) return (an - bn) * dir;
+      if (aValid) return -1;
+      if (bValid) return 1;
+      return String(a.title).localeCompare(String(b.title), "zh-CN");
+    }
+    return String(av ?? "").localeCompare(String(bv ?? ""), "zh-CN") * dir;
+  });
+}
+
+function renderChartBrowser() {
+  const search = els.chartSearchInput.value.trim().toLowerCase();
+  const course = els.chartCourseSelect.value;
+  const rows = sortCharts(
+    state.chartData
+      .filter(chartAllowedBySource)
+      .filter((chart) => !course || chart.course === course)
+      .filter((chart) => !search || getChartSearchText(chart).includes(search))
+      .filter((chart) => state.chartFilters.every((filter) => matchesFilter(chart, filter))),
+  );
+
+  state.chartBrowserRows = rows;
+  const visibleRows = rows.slice(0, CHART_RENDER_LIMIT);
+  els.chartBrowserStatus.textContent = getUseEncoder()
+    ? "当前数据范围：xlsx + encoder"
+    : "当前数据范围：仅 xlsx";
+  els.chartResultCount.textContent = `命中 ${rows.length} 张，显示 ${visibleRows.length} 张`;
+
+  if (!visibleRows.length) {
+    els.chartTableBody.innerHTML = '<tr><td colspan="12" class="empty-cell">没有符合条件的谱面</td></tr>';
+    return;
+  }
+
+  els.chartTableBody.innerHTML = visibleRows
+    .map((chart, index) => {
+      const f = chart.features || {};
+      return `
+        <tr class="clickable-row ${state.selectedChartIndex === index ? "is-selected" : ""}" data-chart-index="${index}">
+          <td>${escapeHtml(chart.title)}</td>
+          <td>${escapeHtml(chart.course_label || chart.course)}</td>
+          <td class="numeric">${formatLoose(chart.level, 0)}</td>
+          <td class="numeric">${formatLoose(chart.const, 1)}</td>
+          <td class="numeric">${formatLoose(chart.combo, 0)}</td>
+          <td class="numeric">${formatLoose(f.complex)}</td>
+          <td class="numeric">${formatLoose(f.avg_density)}</td>
+          <td class="numeric">${formatLoose(f.peak_density)}</td>
+          <td class="numeric">${formatLoose(f.note_type)}</td>
+          <td class="numeric">${formatLoose(f.bpm_change)}</td>
+          <td class="numeric">${formatLoose(f.hs_change)}</td>
+          <td><span class="source-badge ${sourceClass(chart.source)}">${sourceLabel(chart.source, chart.needs_encoder)}</span></td>
+        </tr>
+      `;
+    })
+    .join("");
+}
+
+function renderChartDetail(chart) {
+  if (!chart) {
+    els.chartDetail.className = "detail-panel muted-box";
+    els.chartDetail.textContent = "点击谱面列表中的行查看 JSON 数据";
+    return;
+  }
+  const f = chart.features || {};
+  const items = [
+    ["曲名", chart.title],
+    ["难度", chart.course_label || chart.course],
+    ["星级", formatLoose(chart.level, 0)],
+    ["定数", formatLoose(chart.const, 1)],
+    ["combo", formatLoose(chart.combo, 0)],
+    ["来源", sourceLabel(chart.source, chart.needs_encoder)],
+    ["复合处理", formatLoose(f.complex)],
+    ["平均密度", formatLoose(f.avg_density)],
+    ["瞬间密度", formatLoose(f.peak_density)],
+    ["叩き分け", formatLoose(f.note_type)],
+    ["BPM变化", formatLoose(f.bpm_change)],
+    ["HS变化", formatLoose(f.hs_change)],
+    ["节奏处理", formatLoose(f.rhythm)],
+    ["连打时长", formatLoose(chart.roll_time)],
+    ["气球数", formatLoose(chart.balloon_num, 0)],
+    ["路径", chart.ese?.path || "--"],
+  ];
+  els.chartDetail.className = "detail-panel";
+  els.chartDetail.innerHTML = `
+    <div class="detail-grid">${items
+      .map(([label, value]) => `<div class="detail-item"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`)
+      .join("")}</div>
+    <pre class="json-block">${escapeHtml(JSON.stringify(chart, null, 2))}</pre>
+  `;
+}
+
+function renderFilterRows() {
+  if (!state.chartFilters.length) {
+    els.filterRows.innerHTML = '<div class="muted-box">暂无筛选条件。点击“新增筛选”添加一条 AND 条件。</div>';
+    return;
+  }
+
+  const fieldOptions = FIELD_DEFS.map((field) => `<option value="${field.key}">${field.label}</option>`).join("");
+  const opOptions = FILTER_OPS.map((op) => `<option value="${op.value}">${op.label}</option>`).join("");
+  els.filterRows.innerHTML = state.chartFilters
+    .map(
+      (filter) => `
+        <div class="filter-row" data-filter-id="${filter.id}">
+          <label>
+            字段
+            <select data-filter-field>${fieldOptions}</select>
+          </label>
+          <label>
+            条件
+            <select data-filter-op>${opOptions}</select>
+          </label>
+          <label>
+            值
+            <input data-filter-value type="text" value="${escapeHtml(filter.value)}" placeholder="例如 10.5" />
+          </label>
+          <button type="button" data-remove-filter>删除</button>
+        </div>
+      `,
+    )
+    .join("");
+
+  for (const row of els.filterRows.querySelectorAll(".filter-row")) {
+    const filter = state.chartFilters.find((item) => item.id === row.dataset.filterId);
+    row.querySelector("[data-filter-field]").value = filter.field;
+    row.querySelector("[data-filter-op]").value = filter.op;
+  }
+}
+
+function addFilter() {
+  state.chartFilters.push({
+    id: `filter-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    field: "const",
+    op: ">=",
+    value: "",
+  });
+  renderFilterRows();
+}
+
+function updateFilterFromRow(row) {
+  const filter = state.chartFilters.find((item) => item.id === row.dataset.filterId);
+  if (!filter) return;
+  filter.field = row.querySelector("[data-filter-field]").value;
+  filter.op = row.querySelector("[data-filter-op]").value;
+  filter.value = row.querySelector("[data-filter-value]").value;
+}
+
+function populateControls() {
+  const options = FIELD_DEFS.map((field) => `<option value="${field.key}">${field.label}</option>`).join("");
+  els.chartSortField.innerHTML = options;
+  els.chartSortField.value = "const";
+  renderFilterRows();
+}
+
+function switchPage(pageId) {
+  for (const tab of els.pageTabs) {
+    tab.classList.toggle("is-active", tab.dataset.pageTarget === pageId);
+  }
+  for (const page of els.pages) {
+    page.classList.toggle("is-active", page.id === pageId);
+  }
+  if (location.hash !== `#${pageId}`) {
+    history.replaceState(null, "", `#${pageId}`);
+  }
 }
 
 function exportPng() {
@@ -515,10 +715,87 @@ function exportPng() {
 }
 
 els.fetchButton.addEventListener("click", fetchScores);
-els.loadSampleButton.addEventListener("click", loadSampleConstants);
-els.applyConstantsButton.addEventListener("click", applyConstants);
 els.recalculateButton.addEventListener("click", calculateRating);
 els.exportButton.addEventListener("click", exportPng);
 
-renderCanvas([], 0, Number(els.bestNInput.value) || 30);
+els.useEncoderInput.addEventListener("change", () => {
+  indexChartData(state.chartData);
+  updateChartStatus();
+  state.selectedRatingIndex = null;
+  calculateRating();
+  renderChartBrowser();
+  renderChartDetail(null);
+});
+
+els.tableBody.addEventListener("click", (event) => {
+  const row = event.target.closest("[data-rating-index]");
+  if (!row) return;
+  state.selectedRatingIndex = Number(row.dataset.ratingIndex);
+  renderRatingTable();
+  renderRatingDetail(state.ratingObjects[state.selectedRatingIndex]);
+});
+
+els.chartTableBody.addEventListener("click", (event) => {
+  const row = event.target.closest("[data-chart-index]");
+  if (!row) return;
+  state.selectedChartIndex = Number(row.dataset.chartIndex);
+  renderChartBrowser();
+  renderChartDetail(state.chartBrowserRows[state.selectedChartIndex]);
+});
+
+for (const tab of els.pageTabs) {
+  tab.addEventListener("click", () => switchPage(tab.dataset.pageTarget));
+}
+
+window.addEventListener("hashchange", () => {
+  const target = location.hash.slice(1);
+  if (target && document.getElementById(target)?.classList.contains("page-panel")) {
+    switchPage(target);
+  }
+});
+
+for (const control of [els.chartSearchInput, els.chartCourseSelect, els.chartSortField, els.chartSortDir]) {
+  control.addEventListener("input", renderChartBrowser);
+  control.addEventListener("change", renderChartBrowser);
+}
+
+els.addFilterButton.addEventListener("click", () => {
+  addFilter();
+  renderChartBrowser();
+});
+
+els.clearFiltersButton.addEventListener("click", () => {
+  state.chartFilters = [];
+  renderFilterRows();
+  renderChartBrowser();
+});
+
+els.filterRows.addEventListener("input", (event) => {
+  const row = event.target.closest(".filter-row");
+  if (!row) return;
+  updateFilterFromRow(row);
+  renderChartBrowser();
+});
+
+els.filterRows.addEventListener("change", (event) => {
+  const row = event.target.closest(".filter-row");
+  if (!row) return;
+  updateFilterFromRow(row);
+  renderChartBrowser();
+});
+
+els.filterRows.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-remove-filter]");
+  if (!button) return;
+  const row = button.closest(".filter-row");
+  state.chartFilters = state.chartFilters.filter((filter) => filter.id !== row.dataset.filterId);
+  renderFilterRows();
+  renderChartBrowser();
+});
+
+populateControls();
+if (location.hash.slice(1) === "dataPage") {
+  switchPage("dataPage");
+}
+renderCanvas([]);
 loadChartData();
