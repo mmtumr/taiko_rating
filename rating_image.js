@@ -258,6 +258,16 @@
     return Number(value || 0).toLocaleString("en-US");
   }
 
+  function levelName(level) {
+    return {
+      1: "梅",
+      2: "竹",
+      3: "松",
+      4: "鬼",
+      5: "里",
+    }[String(level)] ?? String(level || "--");
+  }
+
   function rankLabel(score) {
     const s = Number(score || 0);
     if (s >= 1_000_000) return "极";
@@ -428,7 +438,7 @@
     ctx.stroke();
 
     drawFitText(ctx, row.title, x + 106, y + 27, 142, { size: 19, weight: "700", color: "#2b2826" });
-    drawText(ctx, `★${row.constant.toFixed(1)}  ${formatScore(row.highScore)}`, x + 106, y + 50, {
+    drawText(ctx, `${levelName(row.level)} ★${row.constant.toFixed(1)}  ${formatScore(row.highScore)}`, x + 106, y + 50, {
       size: 15,
       color: "#7b7470",
     });
