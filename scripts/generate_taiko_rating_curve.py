@@ -210,14 +210,8 @@ def make_svg():
         f'height="{overview.h:.2f}" fill="none" stroke="{COLORS["line"]}" stroke-width="2" stroke-dasharray="7 5"/>'
     )
 
-    out.append(
-        text(
-            92,
-            882,
-            "&#35828;&#26126;&#65306;&#20302;&#20110;70&#19975;&#19981;&#20877;&#28165;&#38646;&#65307;50w=-10&#65292;60w=-6&#65292;65w=-4&#65292;70w=-2&#65292;80w=+0&#65292;90w=+1&#65292;100w=+2&#12290;",
-            "small",
-        )
-    )
+    out.append(text(92, 858, "说明：里 Rating 仅计入 clear_cnt > 0 的过关成绩；B30 固定除以 30，未满按 0 补位。", "small"))
+    out.append(text(92, 882, "分数补正：低于70万不再清零；50w=-10，60w=-6，65w=-4，70w=-2，80w=+0，90w=+1，100w=+2。", "small"))
     out.append("</svg>")
     return "\n".join(out) + "\n"
 

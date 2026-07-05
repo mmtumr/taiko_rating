@@ -1,5 +1,5 @@
 const API_BASE = "https://kinoko.zorua.cn/api/v1";
-const DATA_VERSION = "20260705-mobile-curve";
+const DATA_VERSION = "20260705-pass-fixed";
 const RATING_BEST_COUNT = 30;
 const CHART_PAGE_SIZE = 10;
 
@@ -22,7 +22,7 @@ const FIELD_DEFS = [
   { key: "complex", label: "复合处理", type: "number" },
   { key: "avg_density", label: "平均密度", type: "number" },
   { key: "peak_density", label: "瞬间密度", type: "number" },
-  { key: "note_type", label: "叩き分け", type: "number" },
+  { key: "note_type", label: "咚咔复杂度", type: "number" },
   { key: "bpm_change", label: "BPM变化", type: "number" },
   { key: "hs_change", label: "HS变化", type: "number" },
   { key: "rhythm", label: "节奏处理", type: "number" },
@@ -48,6 +48,7 @@ const state = {
   chartData: [],
   constantsByTitle: new Map(),
   rated: [],
+  uraRated: [],
   ratingBest: [],
   ratingObjects: [],
   ratingSummary: { classic: { rating: 0, dimensions: {} }, ura: { rating: 0 }, matchedCount: 0 },
@@ -185,9 +186,10 @@ function clamp(value, min, max) {
   return Math.max(min, Math.min(value, max));
 }
 
-function average(values) {
-  const valid = values.filter((value) => Number.isFinite(value));
-  return valid.length ? valid.reduce((sum, value) => sum + value, 0) / valid.length : 0;
+function fixedAverage(values, count) {
+  const denominator = Number(count);
+  if (!Number.isFinite(denominator) || denominator <= 0) return 0;
+  return values.filter((value) => Number.isFinite(value)).reduce((sum, value) => sum + value, 0) / denominator;
 }
 
 function chartUsableForRating(chart) {
@@ -394,6 +396,7 @@ function findChart(record) {
 
 function normalizeHirobaScore(item) {
   const detail = item.song_detail ?? {};
+  const clearCount = Number(item.clear_cnt ?? 0);
   return {
     songNo: Number(item.song_no),
     level: Number(item.level),
@@ -407,6 +410,10 @@ function normalizeHirobaScore(item) {
     ok: Number(item.ok_cnt ?? 0),
     ng: Number(item.ng_cnt ?? 0),
     combo: Number(item.combo_cnt ?? 0),
+    clearCount,
+    fullComboCount: Number(item.full_combo_cnt ?? 0),
+    dondafulComboCount: Number(item.dondaful_combo_cnt ?? 0),
+    passed: clearCount > 0,
     date: item.highscore_datetime || item.update_datetime || "",
     raw: item,
   };
@@ -414,22 +421,29 @@ function normalizeHirobaScore(item) {
 
 function normalizeKinokoScore(group) {
   const scores = Array.isArray(group.scoreInfo) ? group.scoreInfo : [];
-  return scores.map((item) => ({
-    songNo: Number(group.song_no ?? item.song_no),
-    level: Number(group.level ?? item.level),
-    title: group.title_cn || group.title || `song ${group.song_no ?? item.song_no}`,
-    titleJp: group.title || "",
-    titleCn: group.title_cn || "",
-    aliases: [group.title_cn, group.title, group.subTitle, group.subTitle_cn].filter(Boolean),
-    genre: group.genre || "",
-    highScore: Number(item.high_score ?? 0),
-    good: Number(item.good_cnt ?? 0),
-    ok: Number(item.ok_cnt ?? 0),
-    ng: Number(item.ng_cnt ?? 0),
-    combo: Number(item.combo_cnt ?? 0),
-    date: item.highscore_datetime || item.update_datetime || "",
-    raw: item,
-  }));
+  return scores.map((item) => {
+    const clearCount = Number(item.clear_cnt ?? 0);
+    return {
+      songNo: Number(group.song_no ?? item.song_no),
+      level: Number(group.level ?? item.level),
+      title: group.title_cn || group.title || `song ${group.song_no ?? item.song_no}`,
+      titleJp: group.title || "",
+      titleCn: group.title_cn || "",
+      aliases: [group.title_cn, group.title, group.subTitle, group.subTitle_cn].filter(Boolean),
+      genre: group.genre || "",
+      highScore: Number(item.high_score ?? 0),
+      good: Number(item.good_cnt ?? 0),
+      ok: Number(item.ok_cnt ?? 0),
+      ng: Number(item.ng_cnt ?? 0),
+      combo: Number(item.combo_cnt ?? 0),
+      clearCount,
+      fullComboCount: Number(item.full_combo_cnt ?? 0),
+      dondafulComboCount: Number(item.dondaful_combo_cnt ?? 0),
+      passed: clearCount > 0,
+      date: item.highscore_datetime || item.update_datetime || "",
+      raw: item,
+    };
+  });
 }
 
 function normalizeApiResponse(payload, endpoint) {
@@ -453,14 +467,18 @@ function pickBestRecords(records) {
   return [...best.values()];
 }
 
-function calculateRating() {
-  const bestRecords = pickBestRecords(state.records);
-  const rated = bestRecords
+function isPassedRecord(record) {
+  return Number(record?.clearCount ?? record?.clear_cnt ?? record?.raw?.clear_cnt ?? 0) > 0;
+}
+
+function rateRecords(records) {
+  return records
     .map((record) => {
       const chart = findChart(record);
       if (!chart) return null;
       const bonus = scoreBonus(record.highScore);
       const single = bonus == null ? null : chart.const + bonus;
+      const clearCount = Number(record.clearCount ?? record.raw?.clear_cnt ?? 0);
       return {
         ...record,
         chart,
@@ -470,17 +488,27 @@ function calculateRating() {
         needsEncoder: chart.needs_encoder,
         chartCombo: chart.combo,
         features: chart.features || {},
+        clearCount,
+        passed: isPassedRecord(record),
         bonus,
         single,
       };
     })
     .filter(Boolean)
     .sort((a, b) => (b.single ?? -Infinity) - (a.single ?? -Infinity) || b.highScore - a.highScore);
+}
+
+function calculateRating() {
+  const bestRecords = pickBestRecords(state.records);
+  const bestPassedRecords = pickBestRecords(state.records.filter(isPassedRecord));
+  const rated = rateRecords(bestRecords);
+  const uraRated = rateRecords(bestPassedRecords).filter((row) => row.passed && Number.isFinite(row.single));
 
   state.rated = rated;
-  state.ratingBest = rated.filter((row) => Number.isFinite(row.single)).slice(0, RATING_BEST_COUNT);
+  state.uraRated = uraRated;
+  state.ratingBest = uraRated.slice(0, RATING_BEST_COUNT);
   const classicMetrics = window.TaikoRatingImage?.calculateClassicMetrics?.(rated) || { b20: [], rating: 0, dimensions: {} };
-  const uraRating = average(state.ratingBest.map((row) => row.single));
+  const uraRating = fixedAverage(state.ratingBest.map((row) => row.single), RATING_BEST_COUNT);
   const classicBest = classicMetrics.b20 || [];
   els.classicRatingValue.textContent = formatRatingValue(classicMetrics.rating);
   els.ratingValue.textContent = formatRatingValue(uraRating);
@@ -563,8 +591,8 @@ function renderRatingTable(summary = state.ratingSummary) {
   const headerHeight = 106;
   const sectionY = 330;
   const sections = [
-    { mode: "里", title: "里 Rating B30", subtitle: "新公式：定数 + 分数补正", x: margin, color: "#246f92", total: summary.ura?.rating, count: RATING_BEST_COUNT },
-    { mode: "表", title: "表 Rating B20", subtitle: "旧公式：定数得点 x 良率表现", x: margin + columnWidth + gap, color: "#a23b35", total: summary.classic?.rating, count: 20 },
+    { mode: "里", title: "里 Rating B30", subtitle: "仅过关成绩：定数 + 分数补正，固定除以30", x: margin, color: "#246f92", total: summary.ura?.rating, count: RATING_BEST_COUNT },
+    { mode: "表", title: "表 Rating B20", subtitle: "旧公式：定数得点 x 良率表现，固定除以20", x: margin + columnWidth + gap, color: "#a23b35", total: summary.classic?.rating, count: 20 },
   ];
   const topCards = `
     <g>
@@ -579,14 +607,14 @@ function renderRatingTable(summary = state.ratingSummary) {
       <rect x="${margin + 370}" y="44" width="260" height="242" rx="8" fill="#ffffff" stroke="#d9dee5" />
       <text x="${margin + 394}" y="88" font-size="20" font-weight="800" fill="#20252b">匹配谱面</text>
       <text x="${margin + 606}" y="158" font-size="58" font-weight="800" fill="#20252b" text-anchor="end">${escapeHtml(summary.matchedCount ?? 0)}</text>
-      <text x="${margin + 394}" y="218" font-size="15" fill="#66717d">表 Rating B20 / 里 Rating B30</text>
-      <text x="${margin + 394}" y="246" font-size="15" fill="#66717d">竹难度特殊谱面不计入</text>
+      <text x="${margin + 394}" y="218" font-size="15" fill="#66717d">B20/B30 不满按 0 补位</text>
+      <text x="${margin + 394}" y="246" font-size="15" fill="#66717d">里 Rating 仅计入过关成绩</text>
     </g>
   `;
   const radarBlock = `
     <g>
       <text x="1110" y="72" font-size="28" font-weight="800" fill="#20252b">六维 Rating</text>
-      <text x="1112" y="104" font-size="16" fill="#66717d">按旧公式各维度分别取 B20 平均</text>
+      <text x="1112" y="104" font-size="16" fill="#66717d">按旧公式各维度分别取 B20，固定除以20</text>
       ${radarSvg(summary.classic?.dimensions || {}, 1510, 170, 96, "#a23b35")}
     </g>
   `;
@@ -696,6 +724,8 @@ function renderRatingDetail(item) {
     ["来源", sourceLabel(row.chartSource, row.needsEncoder)],
     ["定数", row.constant.toFixed(1)],
     ["分数", formatScore(row.highScore)],
+    ["是否过关", row.passed ? "过关" : "未过关"],
+    ["通关次数", formatLoose(row.clearCount, 0)],
     ["良 / 可 / 不可", `${row.good} / ${row.ok} / ${row.ng}`],
     ["良率", percent(goodRate)],
     ["分数补正", formatBonus(row.bonus)],
@@ -1069,7 +1099,7 @@ function renderChartModalBody(chart) {
     ["复合处理", formatLoose(f.complex)],
     ["平均密度", formatLoose(f.avg_density)],
     ["瞬间密度", formatLoose(f.peak_density)],
-    ["叩き分け", formatLoose(f.note_type)],
+    ["咚咔复杂度", formatLoose(f.note_type)],
     ["BPM变化", formatLoose(f.bpm_change)],
     ["HS变化", formatLoose(f.hs_change)],
     ["节奏处理", formatLoose(f.rhythm)],
@@ -1279,7 +1309,7 @@ async function exportPng() {
   els.exportButton.textContent = "生成中";
   try {
     const canvas = document.createElement("canvas");
-    window.TaikoRatingImage.renderRatingImage(canvas, { allRows: state.rated });
+    window.TaikoRatingImage.renderRatingImage(canvas, { allRows: state.rated, classicRows: state.rated, uraRows: state.uraRated });
     const blob = await canvasToBlob(canvas);
     if (!blob) throw new Error("PNG 生成失败");
     const filename = `taiko-rating-${Date.now()}.png`;

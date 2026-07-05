@@ -83,13 +83,18 @@
     return Math.max(min, Math.min(value, max));
   }
 
-  function average(values) {
-    const valid = values.filter((value) => Number.isFinite(value));
-    return valid.length ? valid.reduce((sum, value) => sum + value, 0) / valid.length : 0;
+  function fixedAverage(values, count) {
+    const denominator = Number(count);
+    if (!Number.isFinite(denominator) || denominator <= 0) return 0;
+    return values.filter((value) => Number.isFinite(value)).reduce((sum, value) => sum + value, 0) / denominator;
   }
 
   function averageTop(values, count = CLASSIC_BEST_COUNT) {
-    return average([...values].filter(Number.isFinite).sort((a, b) => b - a).slice(0, count));
+    return fixedAverage([...values].filter(Number.isFinite).sort((a, b) => b - a).slice(0, count), count);
+  }
+
+  function isPassedRow(row) {
+    return row?.passed === true || Number(row?.clearCount ?? row?.clear_cnt ?? row?.raw?.clear_cnt ?? 0) > 0;
   }
 
   function interpolateAnchors(anchors, value) {
@@ -195,12 +200,14 @@
   }
 
   function calculateUraMetrics(rows) {
-    const uraRows = [...rows].filter((row) => Number.isFinite(row.single)).sort((a, b) => b.single - a.single || b.highScore - a.highScore);
+    const uraRows = [...rows]
+      .filter((row) => isPassedRow(row) && Number.isFinite(row.single))
+      .sort((a, b) => b.single - a.single || b.highScore - a.highScore);
     const b30 = uraRows.slice(0, URA_BEST_COUNT);
     return {
       rows: uraRows,
       b30,
-      rating: average(b30.map((row) => row.single)),
+      rating: fixedAverage(b30.map((row) => row.single), URA_BEST_COUNT),
     };
   }
 
@@ -317,7 +324,7 @@
 
   function drawHeader(ctx, classic, ura, matchedCount) {
     drawText(ctx, "Taiko Rating", 96, 116, { size: 42, weight: "700", color: "#202225" });
-    drawText(ctx, "表 rating 按 B20，里 rating 按 B30 计算", 98, 156, { size: 22, color: "#7b7470" });
+    drawText(ctx, "表 rating 固定除以 B20，里 rating 仅过关且固定除以 B30", 98, 156, { size: 22, color: "#7b7470" });
 
     fillRounded(ctx, 96, 210, 470, 142, 8, "#fff7f4", "#e6d7d1");
     drawText(ctx, "表 Rating", 126, 260, { size: 27, weight: "700", color: "#a23b35" });
@@ -344,7 +351,7 @@
     const maxAxis = Math.max(minAxis + 1, Math.max(...values, 1) + 0.6);
 
     drawText(ctx, "六维 Rating", 760, 116, { size: 32, weight: "700", color: "#202225" });
-    drawText(ctx, "按各维度单独取 B20 平均", 762, 156, { size: 20, color: "#7b7470" });
+    drawText(ctx, "按各维度单独取 B20，缺项按 0 补位", 762, 156, { size: 20, color: "#7b7470" });
 
     ctx.strokeStyle = "#ded8d1";
     ctx.lineWidth = 1.2;
@@ -458,14 +465,16 @@
     canvas.height = IMAGE_H;
 
     const allRows = payload.allRows || [];
-    const classic = calculateClassicMetrics(allRows);
-    const ura = calculateUraMetrics(allRows);
+    const classicRows = payload.classicRows || allRows;
+    const uraRows = payload.uraRows || allRows;
+    const classic = calculateClassicMetrics(classicRows);
+    const ura = calculateUraMetrics(uraRows);
 
     drawBackground(ctx);
-    drawHeader(ctx, classic, ura, allRows.length);
+    drawHeader(ctx, classic, ura, classicRows.length);
     drawRadar(ctx, classic.dimensions);
-    drawSection(ctx, "表 Rating B20", "旧社区公式：定数得点 x 良率表现", classic.b20, 730, "classic");
-    drawSection(ctx, "里 Rating B30", "新公式：谱面定数 + 分数补正，低分不清零，100 万封顶", ura.b30, 1280, "new");
+    drawSection(ctx, "表 Rating B20", "旧社区公式：定数得点 x 良率表现，固定除以 20", classic.b20, 730, "classic");
+    drawSection(ctx, "里 Rating B30", "仅过关成绩：谱面定数 + 分数补正，固定除以 30", ura.b30, 1280, "new");
     drawText(ctx, "Taiko Rating System | 由菌菌成绩与本地谱面库生成", IMAGE_W / 2, IMAGE_H - 74, {
       size: 22,
       color: "#aaa19b",
