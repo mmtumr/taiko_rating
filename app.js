@@ -1,5 +1,5 @@
 const API_BASE = "https://kinoko.zorua.cn/api/v1";
-const DATA_VERSION = "20260705-b30-curve";
+const DATA_VERSION = "20260705-bpm-api-credit";
 const RATING_BEST_COUNT = 30;
 const CHART_PAGE_SIZE = 10;
 
@@ -17,6 +17,7 @@ const FIELD_DEFS = [
   { key: "course", label: "难度", type: "text" },
   { key: "level", label: "星级", type: "number" },
   { key: "const", label: "定数", type: "number" },
+  { key: "bpm", label: "BPM", type: "number" },
   { key: "combo", label: "combo", type: "number" },
   { key: "complex", label: "复合处理", type: "number" },
   { key: "avg_density", label: "平均密度", type: "number" },
@@ -756,6 +757,7 @@ function getChartValue(chart, field) {
     course: chart.course,
     level: chart.level,
     const: chart.const,
+    bpm: chart.bpm,
     combo: chart.combo,
     complex: f.complex,
     avg_density: f.avg_density,
@@ -896,7 +898,7 @@ function renderChartBrowser() {
   renderChartPagination(totalPages);
 
   if (!visibleRows.length) {
-    els.chartTableBody.innerHTML = '<tr><td colspan="12" class="empty-cell">没有符合条件的谱面</td></tr>';
+    els.chartTableBody.innerHTML = '<tr><td colspan="13" class="empty-cell">没有符合条件的谱面</td></tr>';
     return;
   }
 
@@ -910,6 +912,7 @@ function renderChartBrowser() {
           <td>${escapeHtml(chart.course_label || chart.course)}</td>
           <td class="numeric">${formatLoose(chart.level, 0)}</td>
           <td class="numeric">${formatLoose(chart.const, 1)}</td>
+          <td class="numeric">${formatLoose(chart.bpm)}</td>
           <td class="numeric">${formatLoose(chart.combo, 0)}</td>
           <td class="numeric">${formatLoose(f.complex)}</td>
           <td class="numeric">${formatLoose(f.avg_density)}</td>
@@ -1051,6 +1054,7 @@ function renderChartModalBody(chart) {
     ["难度", chart.course_label || chart.course],
     ["星级", formatLoose(chart.level, 0)],
     ["定数", formatLoose(chart.const, 1)],
+    ["BPM", formatLoose(chart.bpm)],
     ["combo", formatLoose(chart.combo, 0)],
     ["来源", sourceLabel(chart.source, chart.needs_encoder)],
     ["复合处理", formatLoose(f.complex)],
@@ -1068,7 +1072,6 @@ function renderChartModalBody(chart) {
     ["预览来源", localPreview ? "本地 TJA 谱面生成" : "--"],
     ["预览小节", localPreview ? `${localPreview.shown_measure_count}/${localPreview.measure_count}` : "--"],
     ["网站", chart.fumen?.url || "--"],
-    ["路径", chart.ese?.path || "--"],
   ];
   return `
     <section class="modal-section">
@@ -1080,10 +1083,6 @@ function renderChartModalBody(chart) {
       <div class="detail-grid">${items
         .map(([label, value]) => `<div class="detail-item"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`)
         .join("")}</div>
-    </section>
-    <section class="modal-section">
-      <h3>JSON</h3>
-      <pre class="json-block">${escapeHtml(JSON.stringify(chart, null, 2))}</pre>
     </section>
   `;
 }

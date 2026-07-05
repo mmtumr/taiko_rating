@@ -1,22 +1,22 @@
 {
-  "total": 5960,
+  "total": 5963,
   "by_course": {
     "Edit": 374,
-    "Hard": 2823,
+    "Hard": 2824,
     "Normal": 2,
-    "Oni": 2761
+    "Oni": 2763
   },
   "by_source": {
-    "encoder": 4479,
+    "encoder": 4480,
     "excel": 991,
-    "fumen": 490
+    "fumen": 492
   },
   "needs_encoder": 0,
-  "duplicate_title_groups": 148,
-  "duplicate_chart_rows": 311,
+  "duplicate_title_groups": 150,
+  "duplicate_chart_rows": 315,
   "exact_numeric_dedupe": {
-    "duplicate_groups_removed": 125,
-    "duplicate_rows_removed": 134,
+    "duplicate_groups_removed": 123,
+    "duplicate_rows_removed": 131,
     "samples": [
       {
         "kept": "ANATATO TURATTATTA♪",
@@ -118,13 +118,6 @@
         ]
       },
       {
-        "kept": "上海ハニー",
-        "course": "Hard",
-        "removed": [
-          "上海ハニー"
-        ]
-      },
-      {
         "kept": "Show",
         "course": "Oni",
         "removed": [
@@ -157,6 +150,13 @@
         "course": "Hard",
         "removed": [
           "TT -Japanese ver.-"
+        ]
+      },
+      {
+        "kept": "向夜晚奔去",
+        "course": "Hard",
+        "removed": [
+          "夜に駆ける -Cover Version-"
         ]
       }
     ]

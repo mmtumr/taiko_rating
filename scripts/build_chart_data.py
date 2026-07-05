@@ -36,6 +36,9 @@ FORCE_NORMAL_TITLES = [
     "Yuugen no Ran",
 ]
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+TAIKO_ROOT = PROJECT_ROOT.parent
+
 
 def read_csv(path: Path) -> list[dict[str, str]]:
     with path.open("r", encoding="utf-8-sig", newline="") as file:
@@ -148,6 +151,41 @@ def build_excel_by_course(strict_rows: list[dict[str, str]]) -> dict[tuple[str, 
     return out
 
 
+def read_tja_bpm(path_text: str) -> float | None:
+    if not path_text:
+        return None
+    path = TAIKO_ROOT / path_text
+    if not path.exists():
+        return None
+    try:
+        raw = path.read_bytes()
+    except OSError:
+        return None
+    for encoding in ("utf-8-sig", "utf-8", "cp932", "shift_jis"):
+        try:
+            text = raw.decode(encoding)
+            break
+        except UnicodeDecodeError:
+            continue
+    else:
+        text = raw.decode("utf-8", "replace")
+    for line in text.splitlines():
+        clean = line.split("//", 1)[0].strip()
+        match = re.match(r"^BPM\s*:\s*(-?\d+(?:\.\d+)?)", clean, re.I)
+        if match:
+            return as_float(match.group(1))
+    return None
+
+
+def build_bpm_by_path(ese_rows: list[dict[str, str]]) -> dict[str, float | None]:
+    bpm_by_path: dict[str, float | None] = {}
+    for row in ese_rows:
+        path = str(row.get("path", ""))
+        if path and path not in bpm_by_path:
+            bpm_by_path[path] = read_tja_bpm(path)
+    return bpm_by_path
+
+
 def maybe_anomaly_dark(row: dict[str, str]) -> bool:
     blob = title_blob(row)
     return "anomalous" in blob.casefold() or "anomaly" in str(row.get("path", "")).casefold()
@@ -197,6 +235,7 @@ def make_record(
     excel_row: dict[str, str] | None,
     fumen_stats_by_id: dict[str, Any],
     encoder_stats_by_id: dict[str, Any],
+    bpm_by_path: dict[str, float | None],
 ) -> dict[str, Any]:
     course = clean_course(row.get("course", ""))
     course_level = COURSE_LEVEL.get(course.casefold())
@@ -242,6 +281,7 @@ def make_record(
         "course": course,
         "course_label": COURSE_LABEL.get(course, course),
         "level": as_int(row.get("level")),
+        "bpm": bpm_by_path.get(str(row.get("path", ""))),
         "score_level": course_level,
         "is_ura": str(row.get("is_ura", "")).lower() == "true",
         "has_branch": str(row.get("has_branch", "")).lower() == "true",
@@ -293,6 +333,7 @@ def numeric_signature(row: dict[str, Any]) -> str:
         "score_level": row.get("score_level"),
         "const": row.get("const"),
         "combo": row.get("combo"),
+        "bpm": row.get("bpm"),
         "features": {
             key: features.get(key)
             for key in ["complex", "avg_density", "peak_density", "note_type", "bpm_change", "hs_change", "rhythm"]
@@ -403,6 +444,7 @@ def build_chart_data(
     excel_by_course: dict[tuple[str, str], dict[str, str]],
     fumen_stats_by_id: dict[str, Any],
     encoder_stats_by_id: dict[str, Any],
+    bpm_by_path: dict[str, float | None],
 ) -> list[dict[str, Any]]:
     records: list[dict[str, Any]] = []
     seen: set[tuple[str, str]] = set()
@@ -418,7 +460,7 @@ def build_chart_data(
             continue
         seen.add(key)
         excel_row = excel_by_course.get(key)
-        records.append(make_record(row, excel_row, fumen_stats_by_id, encoder_stats_by_id))
+        records.append(make_record(row, excel_row, fumen_stats_by_id, encoder_stats_by_id, bpm_by_path))
 
     records, dedupe_summary = drop_exact_numeric_duplicates(records)
     records.sort(key=lambda item: (item["course"] != "Edit", item["course"] != "Oni", item["course"] != "Hard", item["title"]))
@@ -479,7 +521,8 @@ def main() -> None:
     if args.encoder_stats.exists():
         encoder_stats_by_id = json.loads(args.encoder_stats.read_text(encoding="utf-8"))
     excel_by_course = build_excel_by_course(strict_rows)
-    records = build_chart_data(ese_rows, excel_by_course, fumen_stats_by_id, encoder_stats_by_id)
+    bpm_by_path = build_bpm_by_path(ese_rows)
+    records = build_chart_data(ese_rows, excel_by_course, fumen_stats_by_id, encoder_stats_by_id, bpm_by_path)
     summary = summarize(records)
 
     args.output.parent.mkdir(parents=True, exist_ok=True)

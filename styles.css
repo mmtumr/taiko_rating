@@ -234,6 +234,22 @@ textarea:focus {
   margin-top: 10px;
 }
 
+.api-credit {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.api-credit a {
+  color: var(--blue);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.api-credit a:hover {
+  text-decoration: underline;
+}
+
 .table-wrap {
   overflow: auto;
   border: 1px solid var(--line);
@@ -247,7 +263,7 @@ table {
 }
 
 .data-table {
-  min-width: 1180px;
+  min-width: 1260px;
 }
 
 th,
@@ -385,18 +401,6 @@ tbody tr.clickable-row.is-selected td {
   display: block;
   overflow-wrap: anywhere;
   font-size: 15px;
-}
-
-.json-block {
-  max-height: 420px;
-  overflow: auto;
-  margin: 0;
-  padding: 14px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: #101820;
-  color: #d8f3dc;
-  font: 12px/1.5 Consolas, "Microsoft YaHei", monospace;
 }
 
 .filter-rows {
