@@ -141,6 +141,16 @@ def source_page_url(page: str) -> str:
     return f"{BASE_URL}/{'/'.join(parts)}"
 
 
+def source_view_url(page: str) -> str:
+    return f"{BASE_URL}/::cmd/source?page={quote(page, safe='')}"
+
+
+def cdn_ref_url(page: str, filename: str) -> str:
+    page_parts = [quote(part, safe="") for part in page.split("/")]
+    cleaned = filename.strip().lstrip("./")
+    return f"https://cdn.wikiwiki.jp/to/w/taiko-fumen/{'/'.join(page_parts)}/::ref/{quote(cleaned, safe='')}"
+
+
 def match_chart_to_page(chart: dict[str, Any], pages: set[str]) -> dict[str, Any] | None:
     course = str(chart.get("course") or "")
     for name in candidate_names(chart):
@@ -154,6 +164,142 @@ def match_chart_to_page(chart: dict[str, Any], pages: set[str]) -> dict[str, Any
                     "images": [],
                 }
     return None
+
+
+def extract_source_text(html: str) -> str:
+    match = re.search(r'<pre[^>]*id="source"[^>]*>\s*<code[^>]*>(.*?)</code>\s*</pre>', html, re.S)
+    if not match:
+        match = re.search(r'<pre[^>]*class="[^"]*\bwiki-source\b[^"]*"[^>]*>\s*<code[^>]*>(.*?)</code>\s*</pre>', html, re.S)
+    return unescape(match.group(1)) if match else ""
+
+
+def source_score_windows(source: str) -> list[str]:
+    lines = source.splitlines()
+    starts: list[int] = []
+    for index, line in enumerate(lines):
+        if re.match(r"^\*+\s*(?:譜面|画像|プレイ動画)", line):
+            starts.append(index)
+        elif "譜面" in line and re.match(r"^\*+", line):
+            starts.append(index)
+    windows: list[str] = []
+    for start in starts:
+        current_level = len(re.match(r"^\*+", lines[start]).group(0)) if re.match(r"^\*+", lines[start]) else 1
+        end = len(lines)
+        for index in range(start + 1, len(lines)):
+            heading = re.match(r"^(\*+)", lines[index])
+            if heading and len(heading.group(1)) <= current_level:
+                end = index
+                break
+        windows.append("\n".join(lines[start:end]))
+    return windows or [source]
+
+
+def split_ref_args(value: str) -> list[str]:
+    args: list[str] = []
+    current: list[str] = []
+    quote_char = ""
+    escape = False
+    for char in value:
+        if escape:
+            current.append(char)
+            escape = False
+            continue
+        if char == "\\":
+            current.append(char)
+            escape = True
+            continue
+        if quote_char:
+            current.append(char)
+            if char == quote_char:
+                quote_char = ""
+            continue
+        if char in {"'", '"'}:
+            current.append(char)
+            quote_char = char
+            continue
+        if char == ",":
+            args.append("".join(current).strip())
+            current = []
+            continue
+        current.append(char)
+    args.append("".join(current).strip())
+    return args
+
+
+def clean_ref_filename(value: str) -> str:
+    filename = value.strip().strip("'\"")
+    filename = filename.replace("&amp;", "&")
+    filename = unquote(filename)
+    if "#" in filename:
+        filename = filename.split("#", 1)[0]
+    if "?" in filename:
+        filename = filename.split("?", 1)[0]
+    return filename.strip()
+
+
+def looks_like_preview_filename(filename: str) -> bool:
+    if not re.search(r"\.(?:png|jpe?g|webp|gif)$", filename, re.I):
+        return False
+    lowered = filename.casefold()
+    blocked = [
+        "header",
+        "qr",
+        "qrcode",
+        "コード",
+        "jacket",
+        "banner",
+        "logo",
+        "icon",
+        "sound",
+        "audio",
+        "動画",
+        "youtube",
+    ]
+    return not any(token in lowered for token in blocked)
+
+
+def ref_candidates_from_source(source: str) -> list[tuple[str, str]]:
+    candidates: list[tuple[str, str]] = []
+    windows = source_score_windows(source)
+    for pass_index, window in enumerate(windows + ([] if windows == [source] else [source])):
+        for match in re.finditer(r"(?:attachref|ref)\(([^)\r\n]+)\)", window, re.I):
+            args = split_ref_args(match.group(1))
+            if not args:
+                continue
+            filename = clean_ref_filename(args[0])
+            if not filename or filename.lower().startswith(("http://", "https://")):
+                continue
+            if not looks_like_preview_filename(filename):
+                continue
+            context = "score_section" if pass_index < len(windows) else "full_source"
+            candidates.append((filename, context))
+        if candidates:
+            break
+    return candidates
+
+
+def parse_source_images(html: str, page: str, source_page: str, max_images: int) -> list[dict[str, Any]]:
+    source = extract_source_text(html)
+    if not source:
+        return []
+    images: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for filename, context in ref_candidates_from_source(source):
+        if filename in seen:
+            continue
+        seen.add(filename)
+        images.append(
+            {
+                "url": cdn_ref_url(page, filename),
+                "alt": filename,
+                "source_page": source_page,
+                "source": "wiki_source_attachref",
+                "source_context": context,
+            }
+        )
+        if len(images) >= max_images:
+            break
+    return images
 
 
 def parse_images(html: str, source_page: str, max_images: int) -> list[dict[str, Any]]:
@@ -180,6 +326,7 @@ def parse_images(html: str, source_page: str, max_images: int) -> list[dict[str,
                 "height": height,
                 "alt": alt,
                 "source_page": source_page,
+                "source": "wiki_rendered_img",
             }
         )
     return images[:max_images]
@@ -202,17 +349,29 @@ class RateLimiter:
             self.last_at = time.monotonic()
 
 
-def fetch_preview(record: dict[str, Any], limiter: RateLimiter, timeout: int, max_images: int) -> tuple[str, dict[str, Any]]:
+def fetch_preview(
+    record: dict[str, Any],
+    limiter: RateLimiter,
+    timeout: int,
+    max_images: int,
+    fetch_mode: str,
+) -> tuple[str, dict[str, Any]]:
     record_id = str(record["id"])
     source_page = str(record["source_page"])
+    page = str(record["page"])
+    url = source_view_url(page) if fetch_mode == "source" else source_page
     limiter.wait()
     try:
-        html = fetch_text(source_page, timeout=timeout)
-        images = parse_images(html, source_page, max_images=max_images)
+        html = fetch_text(url, timeout=timeout)
+        if fetch_mode == "source":
+            images = parse_source_images(html, page, source_page, max_images=max_images)
+        else:
+            images = parse_images(html, source_page, max_images=max_images)
         return record_id, {
             **record,
             "status": "ok" if images else "no_images",
             "images": images,
+            "fetch_mode": fetch_mode,
         }
     except HTTPError as exc:
         return record_id, {
@@ -220,6 +379,7 @@ def fetch_preview(record: dict[str, Any], limiter: RateLimiter, timeout: int, ma
             "status": "error",
             "error": f"HTTP {exc.code}",
             "images": [],
+            "fetch_mode": fetch_mode,
         }
     except (OSError, URLError, TimeoutError) as exc:
         return record_id, {
@@ -227,7 +387,25 @@ def fetch_preview(record: dict[str, Any], limiter: RateLimiter, timeout: int, ma
             "status": "error",
             "error": f"{type(exc).__name__}: {exc}",
             "images": [],
+            "fetch_mode": fetch_mode,
         }
+
+
+def build_summary(charts: list[Any], pages: set[str], matched: dict[str, dict[str, Any]], fetched: int) -> dict[str, Any]:
+    summary = {
+        "chart_rows": len(charts),
+        "wiki_pages": len(pages),
+        "matched_rows": len(matched),
+        "fetched_this_run": fetched,
+        "with_images": sum(1 for item in matched.values() if item.get("images")),
+        "without_images": sum(1 for item in matched.values() if item.get("status") == "no_images"),
+        "errors": sum(1 for item in matched.values() if item.get("status") == "error"),
+        "status_counts": {},
+    }
+    for item in matched.values():
+        status = str(item.get("status") or "matched")
+        summary["status_counts"][status] = summary["status_counts"].get(status, 0) + 1
+    return summary
 
 
 def main() -> None:
@@ -244,9 +422,11 @@ def main() -> None:
     parser.add_argument("--delay", type=float, default=0.5, help="Global delay between WikiWiki page requests.")
     parser.add_argument("--timeout", type=int, default=25)
     parser.add_argument("--max-images", type=int, default=2)
+    parser.add_argument("--fetch-mode", choices=["source", "rendered"], default="source")
     parser.add_argument("--limit-pages", type=int, default=0, help="Fetch at most this many uncached pages this run.")
     parser.add_argument("--force", action="store_true", help="Refetch pages even if cached.")
     parser.add_argument("--skip-errors", action="store_true", help="Do not retry pages that previously returned an error.")
+    parser.add_argument("--stop-on-429", action="store_true", help="Stop the run as soon as WikiWiki starts rate-limiting.")
     parser.add_argument("--id-contains", action="append", default=[], help="Only fetch matched chart ids containing this text.")
     args = parser.parse_args()
 
@@ -282,32 +462,30 @@ def main() -> None:
 
     limiter = RateLimiter(args.delay)
     fetched = 0
-    with ThreadPoolExecutor(max_workers=max(1, args.workers)) as pool:
-        futures = [
-            pool.submit(fetch_preview, record, limiter, args.timeout, args.max_images)
-            for record in pending
-        ]
-        for future in as_completed(futures):
-            record_id, payload = future.result()
+    if args.stop_on_429 and args.workers <= 1:
+        for record in pending:
+            record_id, payload = fetch_preview(record, limiter, args.timeout, args.max_images, args.fetch_mode)
             matched[record_id] = payload
             fetched += 1
             if fetched % 100 == 0:
                 print(f"fetched {fetched}/{len(pending)}", flush=True)
+            if payload.get("error") == "HTTP 429":
+                print(f"stopped after HTTP 429 at {fetched}/{len(pending)}", flush=True)
+                break
+    else:
+        with ThreadPoolExecutor(max_workers=max(1, args.workers)) as pool:
+            futures = [
+                pool.submit(fetch_preview, record, limiter, args.timeout, args.max_images, args.fetch_mode)
+                for record in pending
+            ]
+            for future in as_completed(futures):
+                record_id, payload = future.result()
+                matched[record_id] = payload
+                fetched += 1
+                if fetched % 100 == 0:
+                    print(f"fetched {fetched}/{len(pending)}", flush=True)
 
-    summary = {
-        "chart_rows": len(charts),
-        "wiki_pages": len(pages),
-        "matched_rows": len(matched),
-        "fetched_this_run": fetched,
-        "with_images": sum(1 for item in matched.values() if item.get("images")),
-        "without_images": sum(1 for item in matched.values() if item.get("status") == "no_images"),
-        "errors": sum(1 for item in matched.values() if item.get("status") == "error"),
-        "status_counts": {},
-    }
-    for item in matched.values():
-        status = str(item.get("status") or "matched")
-        summary["status_counts"][status] = summary["status_counts"].get(status, 0) + 1
-
+    summary = build_summary(charts, pages, matched, fetched)
     write_json(args.output, matched)
     write_json(args.summary, summary)
     print(json.dumps(summary, ensure_ascii=False, indent=2))
