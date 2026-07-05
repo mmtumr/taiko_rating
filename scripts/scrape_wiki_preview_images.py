@@ -427,6 +427,7 @@ def main() -> None:
     parser.add_argument("--force", action="store_true", help="Refetch pages even if cached.")
     parser.add_argument("--skip-errors", action="store_true", help="Do not retry pages that previously returned an error.")
     parser.add_argument("--stop-on-429", action="store_true", help="Stop the run as soon as WikiWiki starts rate-limiting.")
+    parser.add_argument("--checkpoint-every", type=int, default=50, help="Write output and summary every N fetched pages.")
     parser.add_argument("--id-contains", action="append", default=[], help="Only fetch matched chart ids containing this text.")
     args = parser.parse_args()
 
@@ -462,11 +463,19 @@ def main() -> None:
 
     limiter = RateLimiter(args.delay)
     fetched = 0
+
+    def checkpoint() -> None:
+        summary = build_summary(charts, pages, matched, fetched)
+        write_json(args.output, matched)
+        write_json(args.summary, summary)
+
     if args.stop_on_429 and args.workers <= 1:
         for record in pending:
             record_id, payload = fetch_preview(record, limiter, args.timeout, args.max_images, args.fetch_mode)
             matched[record_id] = payload
             fetched += 1
+            if args.checkpoint_every > 0 and fetched % args.checkpoint_every == 0:
+                checkpoint()
             if fetched % 100 == 0:
                 print(f"fetched {fetched}/{len(pending)}", flush=True)
             if payload.get("error") == "HTTP 429":
@@ -482,6 +491,8 @@ def main() -> None:
                 record_id, payload = future.result()
                 matched[record_id] = payload
                 fetched += 1
+                if args.checkpoint_every > 0 and fetched % args.checkpoint_every == 0:
+                    checkpoint()
                 if fetched % 100 == 0:
                     print(f"fetched {fetched}/{len(pending)}", flush=True)
 
