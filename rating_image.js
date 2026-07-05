@@ -76,7 +76,8 @@
 
   const IMAGE_W = 1440;
   const IMAGE_H = 1900;
-  const B20 = 20;
+  const CLASSIC_BEST_COUNT = 20;
+  const URA_BEST_COUNT = 30;
 
   function clamp(value, min, max) {
     return Math.max(min, Math.min(value, max));
@@ -87,7 +88,7 @@
     return valid.length ? valid.reduce((sum, value) => sum + value, 0) / valid.length : 0;
   }
 
-  function averageTop(values, count = B20) {
+  function averageTop(values, count = CLASSIC_BEST_COUNT) {
     return average([...values].filter(Number.isFinite).sort((a, b) => b - a).slice(0, count));
   }
 
@@ -185,21 +186,21 @@
     const classicRows = rows.map(calculateClassicSingle).filter(Boolean).sort((a, b) => b.classicSingle - a.classicSingle);
     return {
       rows: classicRows,
-      b20: classicRows.slice(0, B20),
-      rating: averageTop(classicRows.map((row) => row.classicSingle)),
+      b20: classicRows.slice(0, CLASSIC_BEST_COUNT),
+      rating: averageTop(classicRows.map((row) => row.classicSingle), CLASSIC_BEST_COUNT),
       dimensions: Object.fromEntries(
-        DIMENSIONS.map((dim) => [dim.key, averageTop(classicRows.map((row) => row.dimensions[dim.key]))]),
+        DIMENSIONS.map((dim) => [dim.key, averageTop(classicRows.map((row) => row.dimensions[dim.key]), CLASSIC_BEST_COUNT)]),
       ),
     };
   }
 
   function calculateUraMetrics(rows) {
     const uraRows = [...rows].filter((row) => Number.isFinite(row.single)).sort((a, b) => b.single - a.single || b.highScore - a.highScore);
-    const b20 = uraRows.slice(0, B20);
+    const b30 = uraRows.slice(0, URA_BEST_COUNT);
     return {
       rows: uraRows,
-      b20,
-      rating: average(b20.map((row) => row.single)),
+      b30,
+      rating: average(b30.map((row) => row.single)),
     };
   }
 
@@ -251,7 +252,7 @@
   }
 
   function formatNumber(value, digits = 2) {
-    return Number.isFinite(value) && value > 0 ? value.toFixed(digits) : "--";
+    return Number.isFinite(value) && value !== 0 ? value.toFixed(digits) : "--";
   }
 
   function formatScore(value) {
@@ -316,7 +317,7 @@
 
   function drawHeader(ctx, classic, ura, matchedCount) {
     drawText(ctx, "Taiko Rating", 96, 116, { size: 42, weight: "700", color: "#202225" });
-    drawText(ctx, "表 / 里 rating 均按 B20 计算", 98, 156, { size: 22, color: "#7b7470" });
+    drawText(ctx, "表 rating 按 B20，里 rating 按 B30 计算", 98, 156, { size: 22, color: "#7b7470" });
 
     fillRounded(ctx, 96, 210, 470, 142, 8, "#fff7f4", "#e6d7d1");
     drawText(ctx, "表 Rating", 126, 260, { size: 27, weight: "700", color: "#a23b35" });
@@ -325,7 +326,7 @@
 
     fillRounded(ctx, 96, 382, 470, 142, 8, "#f2f8fb", "#d0dde4");
     drawText(ctx, "里 Rating", 126, 432, { size: 27, weight: "700", color: "#246f92" });
-    drawText(ctx, "新公式 · B20", 126, 466, { size: 18, color: "#718089" });
+    drawText(ctx, "新公式 · B30", 126, 466, { size: 18, color: "#718089" });
     drawText(ctx, formatNumber(ura.rating), 520, 464, { size: 58, weight: "700", color: "#246f92", align: "right", baseline: "middle" });
 
     fillRounded(ctx, 96, 554, 470, 92, 8, "#ffffff", "#ded8d1");
@@ -404,15 +405,15 @@
     drawText(ctx, title, 116, y + 54, { size: 30, weight: "700", color: "#2b2826" });
     drawText(ctx, subtitle, 116, y + 88, { size: 19, color: "#7b7470" });
 
-    const cardW = 300;
-    const cardH = 66;
+    const cardW = 236;
+    const cardH = 54;
     const startX = 102;
     const startY = y + 122;
-    const gapX = 18;
-    const gapY = 16;
-    rows.slice(0, B20).forEach((row, index) => {
-      const col = index % 4;
-      const line = Math.floor(index / 4);
+    const gapX = 16;
+    const gapY = 10;
+    rows.forEach((row, index) => {
+      const col = index % 5;
+      const line = Math.floor(index / 5);
       drawSongCard(ctx, row, index, startX + col * (cardW + gapX), startY + line * (cardH + gapY), cardW, cardH, mode);
     });
   }
@@ -425,25 +426,25 @@
 
     const value = mode === "classic" ? row.classicSingle : row.single;
     drawText(ctx, String(index + 1).padStart(2, "0"), x + 16, y + 18, { size: 13, weight: "700", color: "#b0a9a4" });
-    drawText(ctx, formatNumber(value), x + 16, y + 47, {
-      size: 25,
+    drawText(ctx, formatNumber(value), x + 16, y + 41, {
+      size: 22,
       weight: "700",
       color: accent,
       baseline: "middle",
     });
     ctx.strokeStyle = "#e4ddd7";
     ctx.beginPath();
-    ctx.moveTo(x + 90, y + 12);
-    ctx.lineTo(x + 90, y + h - 12);
+    ctx.moveTo(x + 80, y + 10);
+    ctx.lineTo(x + 80, y + h - 10);
     ctx.stroke();
 
-    drawFitText(ctx, row.title, x + 106, y + 27, 142, { size: 19, weight: "700", color: "#2b2826" });
-    drawText(ctx, `${levelName(row.level)} ★${row.constant.toFixed(1)}  ${formatScore(row.highScore)}`, x + 106, y + 50, {
-      size: 15,
+    drawFitText(ctx, row.title, x + 94, y + 24, 98, { size: 16, weight: "700", color: "#2b2826" });
+    drawText(ctx, `${levelName(row.level)} ★${row.constant.toFixed(1)}`, x + 94, y + 44, {
+      size: 13,
       color: "#7b7470",
     });
-    drawText(ctx, rankLabel(row.highScore), x + w - 18, y + 35, {
-      size: 16,
+    drawText(ctx, rankLabel(row.highScore), x + w - 12, y + 28, {
+      size: 14,
       weight: "700",
       color: rankPaint(ctx, row.highScore, x + w - 82, 64),
       align: "right",
@@ -464,7 +465,7 @@
     drawHeader(ctx, classic, ura, allRows.length);
     drawRadar(ctx, classic.dimensions);
     drawSection(ctx, "表 Rating B20", "旧社区公式：定数得点 x 良率表现", classic.b20, 730, "classic");
-    drawSection(ctx, "里 Rating B20", "新公式：谱面定数 + 分数补正，70 万起计，100 万封顶", ura.b20, 1280, "new");
+    drawSection(ctx, "里 Rating B30", "新公式：谱面定数 + 分数补正，低分不清零，100 万封顶", ura.b30, 1280, "new");
     drawText(ctx, "Taiko Rating System | 由菌菌成绩与本地谱面库生成", IMAGE_W / 2, IMAGE_H - 74, {
       size: 22,
       color: "#aaa19b",

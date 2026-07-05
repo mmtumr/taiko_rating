@@ -256,7 +256,7 @@ def make_record(
         "source": source,
         "needs_encoder": excel_row is None and fumen_row_stats is None and generated_stats is None,
         "rating_excluded": rating_excluded,
-        "rating_exclusion_reason": "竹难度为更松判定，仅作理论难度参考，不参与表/里 Rating B20" if rating_excluded else None,
+        "rating_exclusion_reason": "竹难度为更松判定，仅作理论难度参考，不参与表 Rating B20 / 里 Rating B30" if rating_excluded else None,
         "force_included": is_forced_normal(row),
         "review": {
             "matched_combo_delta": as_int(excel_row.get("combo_delta")) if excel_row else (

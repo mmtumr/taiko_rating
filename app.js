@@ -1,6 +1,6 @@
 const API_BASE = "https://kinoko.zorua.cn/api/v1";
-const DATA_VERSION = "20260705-local-preview";
-const RATING_BEST_COUNT = 20;
+const DATA_VERSION = "20260705-b30-curve";
+const RATING_BEST_COUNT = 30;
 const CHART_PAGE_SIZE = 10;
 
 const RADAR_DIMS = [
@@ -152,27 +152,11 @@ function isEstimatedSource(chart) {
 
 function scoreBonus(score) {
   const scoreValue = Number(score);
-  if (!Number.isFinite(scoreValue) || scoreValue < 700_000) return null;
-  const rate = Math.max(0, Math.min(scoreValue / 1_000_000, 1));
-  const anchors = [
-    [0.7, -2.0],
-    [0.75, -1.0],
-    [0.8, 0.0],
-    [0.9, 0.5],
-    [0.95, 1.0],
-    [1.0, 1.5],
-  ];
-
-  if (rate <= anchors[0][0]) return anchors[0][1];
-  for (let i = 1; i < anchors.length; i += 1) {
-    const [x1, y1] = anchors[i - 1];
-    const [x2, y2] = anchors[i];
-    if (rate <= x2) {
-      const t = (rate - x1) / (x2 - x1);
-      return y1 + (y2 - y1) * t;
-    }
-  }
-  return anchors[anchors.length - 1][1];
+  if (!Number.isFinite(scoreValue)) return null;
+  const clamped = Math.max(0, Math.min(scoreValue, 1_000_000));
+  if (clamped < 700_000) return -2 - ((700_000 - clamped) / 50_000) * 2;
+  if (clamped <= 800_000) return -2 + (clamped - 700_000) / 50_000;
+  return (clamped - 800_000) / 100_000;
 }
 
 function getUseEncoder() {
@@ -229,7 +213,7 @@ function formatSingle(value) {
 
 function formatRatingValue(value) {
   const number = Number(value);
-  return Number.isFinite(number) && number > 0 ? number.toFixed(2) : "--";
+  return Number.isFinite(number) && number !== 0 ? number.toFixed(2) : "--";
 }
 
 function rankLabel(score) {
@@ -560,7 +544,7 @@ function renderRatingTable(summary = state.ratingSummary) {
   }
 
   const width = 1900;
-  const height = 1760;
+  const height = 2400;
   const margin = 34;
   const gap = 28;
   const columnWidth = (width - margin * 2 - gap) / 2;
@@ -569,8 +553,8 @@ function renderRatingTable(summary = state.ratingSummary) {
   const headerHeight = 106;
   const sectionY = 330;
   const sections = [
-    { mode: "里", title: "里 Rating B20", subtitle: "新公式：定数 + 分数补正", x: margin, color: "#246f92", total: summary.ura?.rating },
-    { mode: "表", title: "表 Rating B20", subtitle: "旧公式：定数得点 x 良率表现", x: margin + columnWidth + gap, color: "#a23b35", total: summary.classic?.rating },
+    { mode: "里", title: "里 Rating B30", subtitle: "新公式：定数 + 分数补正", x: margin, color: "#246f92", total: summary.ura?.rating, count: RATING_BEST_COUNT },
+    { mode: "表", title: "表 Rating B20", subtitle: "旧公式：定数得点 x 良率表现", x: margin + columnWidth + gap, color: "#a23b35", total: summary.classic?.rating, count: 20 },
   ];
   const topCards = `
     <g>
@@ -585,7 +569,7 @@ function renderRatingTable(summary = state.ratingSummary) {
       <rect x="${margin + 370}" y="44" width="260" height="242" rx="8" fill="#ffffff" stroke="#d9dee5" />
       <text x="${margin + 394}" y="88" font-size="20" font-weight="800" fill="#20252b">匹配谱面</text>
       <text x="${margin + 606}" y="158" font-size="58" font-weight="800" fill="#20252b" text-anchor="end">${escapeHtml(summary.matchedCount ?? 0)}</text>
-      <text x="${margin + 394}" y="218" font-size="15" fill="#66717d">表/里 Rating 均按 B20 计算</text>
+      <text x="${margin + 394}" y="218" font-size="15" fill="#66717d">表 Rating B20 / 里 Rating B30</text>
       <text x="${margin + 394}" y="246" font-size="15" fill="#66717d">竹难度特殊谱面不计入</text>
     </g>
   `;
@@ -603,7 +587,7 @@ function renderRatingTable(summary = state.ratingSummary) {
         const entries = rows
           .map((item, index) => ({ item, index }))
           .filter((entry) => entry.item.mode === section.mode)
-          .slice(0, RATING_BEST_COUNT);
+          .slice(0, section.count);
         const y = sectionY;
         const rowSvg = entries
           .map((entry, rankIndex) => {
@@ -646,7 +630,7 @@ function renderRatingTable(summary = state.ratingSummary) {
             <text x="${section.x + 22}" y="${y + 40}" font-size="28" font-weight="800" fill="${section.color}">${section.title}</text>
             <text x="${section.x + 22}" y="${y + 70}" font-size="16" fill="#66717d">${section.subtitle}</text>
             <text x="${section.x + columnWidth - 22}" y="${y + 40}" font-size="30" font-weight="800" fill="${section.color}" text-anchor="end">${escapeHtml(formatRatingValue(section.total))}</text>
-            <text x="${section.x + columnWidth - 22}" y="${y + 68}" font-size="14" fill="#66717d" text-anchor="end">总分 / B20</text>
+            <text x="${section.x + columnWidth - 22}" y="${y + 68}" font-size="14" fill="#66717d" text-anchor="end">总分 / B${section.count}</text>
             <text x="${section.x + columnWidth - 468}" y="${y + 95}" font-size="12" fill="#8b949e" text-anchor="end">总分</text>
             <text x="${section.x + columnWidth - 358}" y="${y + 95}" font-size="12" fill="#8b949e" text-anchor="end">评价</text>
             <text x="${section.x + columnWidth - 262}" y="${y + 95}" font-size="12" fill="#8b949e" text-anchor="end">定数</text>
@@ -661,7 +645,7 @@ function renderRatingTable(summary = state.ratingSummary) {
 
   els.ratingSvgWrap.className = "rating-svg-wrap";
   els.ratingSvgWrap.innerHTML = `
-    <svg id="ratingObjectSvg" class="rating-object-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" role="img" aria-label="Rating B20">
+    <svg id="ratingObjectSvg" class="rating-object-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" role="img" aria-label="Rating B20/B30">
       <defs>
         <linearGradient id="rankRainbow" x1="0%" y1="0%" x2="100%" y2="0%">
           <stop offset="0%" stop-color="#e03131" />
@@ -695,7 +679,7 @@ function renderRatingDetail(item) {
   const dims = classic?.dimensions || {};
   const f = row.features || {};
   const items = [
-    ["Rating对象", `${item.mode} Rating B20`],
+    ["Rating对象", `${item.mode} Rating ${item.mode === "里" ? "B30" : "B20"}`],
     ["曲名", row.title],
     ["匹配谱面", row.constantTitle],
     ["难度", levelName(row.level)],
