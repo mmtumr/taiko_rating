@@ -1,0 +1,25 @@
+{
+  "input_charts": 6094,
+  "selected": 4561,
+  "generated": 4561,
+  "errors": 0,
+  "changed_const_by_at_least_1_5": 564,
+  "by_course": {
+    "Edit": 119,
+    "Hard": 2881,
+    "Normal": 2,
+    "Oni": 1559
+  },
+  "courses": [
+    "Edit",
+    "Hard",
+    "Normal",
+    "Oni"
+  ],
+  "device": "cuda",
+  "model": "const_ordinal_lowaux_v1",
+  "checkpoint": "D:\\taiko\\taiko-diffusion\\checkpoints\\const_ordinal_lowaux_experiment\\best.pt",
+  "base_stats": "D:\\taiko\\taiko_rating\\data\\encoder_chart_stats.json",
+  "elapsed_seconds": 106.0,
+  "error_samples": []
+}

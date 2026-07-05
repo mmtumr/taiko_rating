@@ -7,13 +7,17 @@
     "Oni": 2825
   },
   "by_source": {
-    "encoder": 5101,
-    "excel": 993
+    "encoder": 4561,
+    "excel": 993,
+    "fumen": 540
   },
   "needs_encoder": 0,
+  "duplicate_title_groups": 215,
+  "duplicate_chart_rows": 473,
   "force_included": [
     {
       "title": "DARK EX MACHINA♡",
+      "display_title": "DARK EX MACHINA♡",
       "course": "Normal",
       "level": 7,
       "source": "encoder",
@@ -21,6 +25,7 @@
     },
     {
       "title": "幽玄之乱",
+      "display_title": "幽玄之乱",
       "course": "Normal",
       "level": 7,
       "source": "encoder",

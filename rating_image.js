@@ -266,7 +266,32 @@
     if (s >= 800_000) return "金雅";
     if (s >= 750_000) return "银粹";
     if (s >= 700_000) return "过关";
-    return "未通";
+    return "未通过";
+  }
+
+  function rankColor(score) {
+    const label = rankLabel(score);
+    return {
+      "过关": "#c92a2a",
+      "银粹": "#8f9aa6",
+      "金雅": "#c88a13",
+      "粉雅": "#d65b91",
+      "紫雅": "#7c4dff",
+      "极": "#e03131",
+      "未通过": "#8b949e",
+    }[label] || "#8b949e";
+  }
+
+  function rankPaint(ctx, score, x, w) {
+    if (rankLabel(score) !== "极") return rankColor(score);
+    const gradient = ctx.createLinearGradient(x, 0, x + w, 0);
+    gradient.addColorStop(0, "#e03131");
+    gradient.addColorStop(0.18, "#f08c00");
+    gradient.addColorStop(0.36, "#f2c94c");
+    gradient.addColorStop(0.54, "#2f9e44");
+    gradient.addColorStop(0.72, "#1971c2");
+    gradient.addColorStop(1, "#9c36b5");
+    return gradient;
   }
 
   function drawBackground(ctx) {
@@ -285,7 +310,7 @@
 
     fillRounded(ctx, 96, 210, 470, 142, 8, "#fff7f4", "#e6d7d1");
     drawText(ctx, "表 Rating", 126, 260, { size: 27, weight: "700", color: "#a23b35" });
-    drawText(ctx, "旧 Excel 公式 · B20", 126, 294, { size: 18, color: "#8c7e79" });
+    drawText(ctx, "旧社区公式 · B20", 126, 294, { size: 18, color: "#8c7e79" });
     drawText(ctx, formatNumber(classic.rating), 520, 292, { size: 58, weight: "700", color: "#a23b35", align: "right", baseline: "middle" });
 
     fillRounded(ctx, 96, 382, 470, 142, 8, "#f2f8fb", "#d0dde4");
@@ -410,7 +435,7 @@
     drawText(ctx, rankLabel(row.highScore), x + w - 18, y + 35, {
       size: 16,
       weight: "700",
-      color: accent,
+      color: rankPaint(ctx, row.highScore, x + w - 82, 64),
       align: "right",
       baseline: "middle",
     });
@@ -428,7 +453,7 @@
     drawBackground(ctx);
     drawHeader(ctx, classic, ura, allRows.length);
     drawRadar(ctx, classic.dimensions);
-    drawSection(ctx, "表 Rating B20", "旧 Excel 公式：定数得点 x 良率表现", classic.b20, 730, "classic");
+    drawSection(ctx, "表 Rating B20", "旧社区公式：定数得点 x 良率表现", classic.b20, 730, "classic");
     drawSection(ctx, "里 Rating B20", "新公式：谱面定数 + 分数补正，70 万起计，100 万封顶", ura.b20, 1280, "new");
     drawText(ctx, "Taiko Rating System | 由菌菌成绩与本地谱面库生成", IMAGE_W / 2, IMAGE_H - 74, {
       size: 22,

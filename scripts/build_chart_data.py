@@ -114,6 +114,26 @@ def excel_stats(row: dict[str, str]) -> dict[str, Any]:
     }
 
 
+def numeric_stats(stats: dict[str, Any]) -> dict[str, Any]:
+    features = stats.get("features") or {}
+    return {
+        "const": as_float(stats.get("const")),
+        "combo": as_int(stats.get("combo")),
+        "features": {
+            "complex": as_float(features.get("complex")),
+            "avg_density": as_float(features.get("avg_density")),
+            "peak_density": as_float(features.get("peak_density")),
+            "note_type": as_float(features.get("note_type")),
+            "bpm_change": as_float(features.get("bpm_change")),
+            "hs_change": as_float(features.get("hs_change")),
+            "rhythm": as_float(features.get("rhythm")),
+        },
+        "roll_time": stats.get("roll_time") or None,
+        "roll_time_seconds": as_float(stats.get("roll_time_seconds")),
+        "balloon_num": as_int(stats.get("balloon_num"), 0),
+    }
+
+
 def build_excel_by_course(strict_rows: list[dict[str, str]]) -> dict[tuple[str, str], dict[str, Any]]:
     out: dict[tuple[str, str], dict[str, Any]] = {}
     for row in strict_rows:
@@ -139,6 +159,21 @@ def should_keep_forced_duplicate(row: dict[str, str]) -> bool:
     return True
 
 
+def fumen_stats(stats_by_id: dict[str, Any], record_id: str) -> dict[str, Any] | None:
+    stats = stats_by_id.get(record_id)
+    if not isinstance(stats, dict):
+        return None
+    if stats.get("const") is None:
+        return None
+    fumen = stats.get("fumen") if isinstance(stats.get("fumen"), dict) else {}
+    if fumen and fumen.get("status") not in {None, "ok"}:
+        return None
+    return {
+        **numeric_stats(stats),
+        "fumen": fumen,
+    }
+
+
 def encoder_stats(stats_by_id: dict[str, Any], record_id: str) -> dict[str, Any] | None:
     stats = stats_by_id.get(record_id)
     if not isinstance(stats, dict):
@@ -148,22 +183,8 @@ def encoder_stats(stats_by_id: dict[str, Any], record_id: str) -> dict[str, Any]
     encoder = stats.get("encoder") if isinstance(stats.get("encoder"), dict) else {}
     if encoder and encoder.get("status") not in {None, "ok"}:
         return None
-    features = stats.get("features") or {}
     return {
-        "const": as_float(stats.get("const")),
-        "combo": as_int(stats.get("combo")),
-        "features": {
-            "complex": as_float(features.get("complex")),
-            "avg_density": as_float(features.get("avg_density")),
-            "peak_density": as_float(features.get("peak_density")),
-            "note_type": as_float(features.get("note_type")),
-            "bpm_change": as_float(features.get("bpm_change")),
-            "hs_change": as_float(features.get("hs_change")),
-            "rhythm": as_float(features.get("rhythm")),
-        },
-        "roll_time": stats.get("roll_time") or None,
-        "roll_time_seconds": as_float(stats.get("roll_time_seconds")),
-        "balloon_num": as_int(stats.get("balloon_num"), 0),
+        **numeric_stats(stats),
         "encoder": stats.get("encoder"),
     }
 
@@ -171,34 +192,47 @@ def encoder_stats(stats_by_id: dict[str, Any], record_id: str) -> dict[str, Any]
 def make_record(
     row: dict[str, str],
     excel_row: dict[str, str] | None,
+    fumen_stats_by_id: dict[str, Any],
     encoder_stats_by_id: dict[str, Any],
+    wiki_previews_by_id: dict[str, Any],
 ) -> dict[str, Any]:
     course = clean_course(row.get("course", ""))
     course_level = COURSE_LEVEL.get(course.casefold())
     record_id = f"ese:{row.get('path')}::{course}"
-    generated_stats = None if excel_row is not None else encoder_stats(encoder_stats_by_id, record_id)
-    source = "excel" if excel_row is not None else ("encoder" if generated_stats is not None else "encoder_pending")
-    stats = excel_stats(excel_row) if excel_row is not None else generated_stats or {
-        "const": None,
-        "combo": as_int(row.get("note_count")),
-        "features": {
-            "complex": None,
-            "avg_density": None,
-            "peak_density": None,
-            "note_type": None,
-            "bpm_change": None,
-            "hs_change": None,
-            "rhythm": None,
-        },
-        "roll_time": None,
-        "balloon_num": None,
-    }
+    generated_stats = None
+    fumen_row_stats = None if excel_row is not None else fumen_stats(fumen_stats_by_id, record_id)
+    if excel_row is not None:
+        source = "excel"
+        stats = excel_stats(excel_row)
+    elif fumen_row_stats is not None:
+        source = "fumen"
+        stats = fumen_row_stats
+    else:
+        generated_stats = encoder_stats(encoder_stats_by_id, record_id)
+        source = "encoder" if generated_stats is not None else "encoder_pending"
+        stats = generated_stats or {
+            "const": None,
+            "combo": as_int(row.get("note_count")),
+            "features": {
+                "complex": None,
+                "avg_density": None,
+                "peak_density": None,
+                "note_type": None,
+                "bpm_change": None,
+                "hs_change": None,
+                "rhythm": None,
+            },
+            "roll_time": None,
+            "balloon_num": None,
+        }
     title = row.get("title_zh") or row.get("title_ja") or row.get("title") or ""
     aliases = [
         value
         for value in [row.get("title"), row.get("title_ja"), row.get("title_zh")]
         if value and value != title
     ]
+    rating_excluded = course.casefold() == "normal"
+    wiki_preview = wiki_previews_by_id.get(record_id) if isinstance(wiki_previews_by_id.get(record_id), dict) else {}
     return {
         "id": record_id,
         "title": title,
@@ -218,20 +252,66 @@ def make_record(
             "balloon_declared": row.get("balloon_declared") or None,
         },
         **stats,
+        "wiki_preview": wiki_preview or None,
+        "preview_images": wiki_preview.get("images", []) if wiki_preview else [],
         "source": source,
-        "needs_encoder": excel_row is None and generated_stats is None,
+        "needs_encoder": excel_row is None and fumen_row_stats is None and generated_stats is None,
+        "rating_excluded": rating_excluded,
+        "rating_exclusion_reason": "竹难度为更松判定，仅作理论难度参考，不参与表/里 Rating B20" if rating_excluded else None,
         "force_included": is_forced_normal(row),
         "review": {
-            "matched_combo_delta": as_int(excel_row.get("combo_delta")) if excel_row else None,
-            "matched_combo_delta_threshold": as_int(excel_row.get("combo_delta_threshold")) if excel_row else None,
+            "matched_combo_delta": as_int(excel_row.get("combo_delta")) if excel_row else (
+                as_int((stats.get("fumen") or {}).get("match", {}).get("combo_delta")) if source == "fumen" else None
+            ),
+            "matched_combo_delta_threshold": as_int(excel_row.get("combo_delta_threshold")) if excel_row else (
+                as_int((stats.get("fumen") or {}).get("match", {}).get("combo_delta_threshold")) if source == "fumen" else None
+            ),
         },
     }
+
+
+def variant_label(row: dict[str, Any]) -> str:
+    title_key = row.get("title_normalized") or normalize_title(row.get("title", ""))
+    path_text = str(row.get("ese", {}).get("path") or "")
+    path = Path(path_text)
+    candidates = [
+        path.stem,
+        path.parent.name,
+        str(row.get("ese", {}).get("category") or ""),
+        path_text,
+    ]
+    for candidate in candidates:
+        if candidate and normalize_title(candidate) != title_key:
+            return candidate
+    return path_text or str(row.get("course") or "")
+
+
+def add_duplicate_metadata(records: list[dict[str, Any]]) -> None:
+    groups: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for row in records:
+        key = (str(row.get("title_normalized") or normalize_title(row.get("title", ""))), str(row.get("course") or ""))
+        groups.setdefault(key, []).append(row)
+
+    for group in groups.values():
+        group.sort(key=lambda item: str(item.get("ese", {}).get("path") or ""))
+        for index, row in enumerate(group, start=1):
+            row["duplicate_group_size"] = len(group)
+            row["duplicate_index"] = index
+            if len(group) == 1:
+                row["display_title"] = row["title"]
+                row["variant_label"] = None
+                continue
+            label = variant_label(row)
+            row["variant_label"] = label
+            row["display_title"] = f"{row['title']} · {label}" if label else f"{row['title']} · #{index}"
 
 
 def build_chart_data(
     ese_rows: list[dict[str, str]],
     excel_by_course: dict[tuple[str, str], dict[str, str]],
+    fumen_stats_by_id: dict[str, Any],
     encoder_stats_by_id: dict[str, Any],
+    wiki_previews_by_id: dict[str, Any],
 ) -> list[dict[str, Any]]:
     records: list[dict[str, Any]] = []
     seen: set[tuple[str, str]] = set()
@@ -247,9 +327,10 @@ def build_chart_data(
             continue
         seen.add(key)
         excel_row = excel_by_course.get(key)
-        records.append(make_record(row, excel_row, encoder_stats_by_id))
+        records.append(make_record(row, excel_row, fumen_stats_by_id, encoder_stats_by_id, wiki_previews_by_id))
 
     records.sort(key=lambda item: (item["course"] != "Edit", item["course"] != "Oni", item["course"] != "Hard", item["title"]))
+    add_duplicate_metadata(records)
     return records
 
 
@@ -257,14 +338,18 @@ def summarize(records: list[dict[str, Any]]) -> dict[str, Any]:
     by_course = Counter(row["course"] for row in records)
     by_source = Counter(row["source"] for row in records)
     forced = [row for row in records if row["force_included"]]
+    duplicate_groups = Counter((row["title_normalized"], row["course"]) for row in records)
     return {
         "total": len(records),
         "by_course": dict(sorted(by_course.items())),
         "by_source": dict(sorted(by_source.items())),
         "needs_encoder": sum(1 for row in records if row["needs_encoder"]),
+        "duplicate_title_groups": sum(1 for count in duplicate_groups.values() if count > 1),
+        "duplicate_chart_rows": sum(count for count in duplicate_groups.values() if count > 1),
         "force_included": [
             {
                 "title": row["title"],
+                "display_title": row["display_title"],
                 "course": row["course"],
                 "level": row["level"],
                 "source": row["source"],
@@ -281,18 +366,26 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Build static Taiko chart data for the rating frontend.")
     parser.add_argument("--ese-courses", type=Path, default=Path("../taiko_encoder_out/ese_courses.csv"))
     parser.add_argument("--strict-matched", type=Path, default=Path("../taiko_encoder_out/strict_matched_dataset.csv"))
+    parser.add_argument("--fumen-stats", type=Path, default=Path("data/fumen_chart_stats.json"))
     parser.add_argument("--encoder-stats", type=Path, default=Path("data/encoder_chart_stats.json"))
+    parser.add_argument("--wiki-previews", type=Path, default=Path("data/wiki_preview_images.json"))
     parser.add_argument("--output", type=Path, default=Path("data/chart_data.json"))
     parser.add_argument("--summary", type=Path, default=Path("data/chart_data_summary.json"))
     args = parser.parse_args()
 
     ese_rows = read_csv(args.ese_courses)
     strict_rows = read_csv(args.strict_matched)
+    fumen_stats_by_id: dict[str, Any] = {}
+    if args.fumen_stats.exists():
+        fumen_stats_by_id = json.loads(args.fumen_stats.read_text(encoding="utf-8"))
     encoder_stats_by_id: dict[str, Any] = {}
     if args.encoder_stats.exists():
         encoder_stats_by_id = json.loads(args.encoder_stats.read_text(encoding="utf-8"))
+    wiki_previews_by_id: dict[str, Any] = {}
+    if args.wiki_previews.exists():
+        wiki_previews_by_id = json.loads(args.wiki_previews.read_text(encoding="utf-8"))
     excel_by_course = build_excel_by_course(strict_rows)
-    records = build_chart_data(ese_rows, excel_by_course, encoder_stats_by_id)
+    records = build_chart_data(ese_rows, excel_by_course, fumen_stats_by_id, encoder_stats_by_id, wiki_previews_by_id)
     summary = summarize(records)
 
     args.output.parent.mkdir(parents=True, exist_ok=True)

@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Taiko Rating</title>
-    <link rel="stylesheet" href="styles.css?v=20260704-rating-svg" />
+    <link rel="stylesheet" href="styles.css?v=20260705-pagination-rank-colors" />
   </head>
   <body>
     <main class="app-shell">
@@ -16,7 +16,7 @@
         <div class="topbar-actions">
           <label class="toggle-line">
             <input id="useEncoderInput" type="checkbox" checked />
-            使用 encoder 数据
+            使用神经网络数据
           </label>
           <div class="summary-strip">
             <div>
@@ -97,14 +97,6 @@
               <div id="ratingDetail" class="detail-panel muted-box">点击 Rating 图中的歌曲查看详细数值</div>
             </section>
           </section>
-
-          <aside class="preview">
-            <div class="preview-head">
-              <h2>图片预览</h2>
-              <span id="imageStatus">未生成</span>
-            </div>
-            <canvas id="ratingCanvas" width="1440" height="1900"></canvas>
-          </aside>
         </div>
       </section>
 
@@ -178,18 +170,26 @@
               </tbody>
             </table>
           </div>
+          <div id="chartPagination" class="pagination" aria-label="谱面分页"></div>
         </section>
 
-        <section class="panel">
-          <div class="panel-head">
-            <h2>谱面详情</h2>
-          </div>
-          <div id="chartDetail" class="detail-panel muted-box">点击谱面列表中的行查看 JSON 数据</div>
-        </section>
       </section>
     </main>
 
-    <script src="rating_image.js?v=20260704-rating-svg"></script>
-    <script src="app.js?v=20260704-rating-svg"></script>
+    <div id="chartModal" class="modal-backdrop" hidden>
+      <section class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="chartModalTitle">
+        <div class="modal-head">
+          <div>
+            <span>谱面详情</span>
+            <h2 id="chartModalTitle">谱面详情</h2>
+          </div>
+          <button id="chartModalClose" class="modal-close" type="button">关闭</button>
+        </div>
+        <div id="chartModalBody" class="modal-body"></div>
+      </section>
+    </div>
+
+    <script src="rating_image.js?v=20260705-pagination-rank-colors"></script>
+    <script src="app.js?v=20260705-pagination-rank-colors"></script>
   </body>
 </html>

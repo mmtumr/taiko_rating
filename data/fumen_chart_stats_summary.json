@@ -1,0 +1,42 @@
+{
+  "difficulty_url": "https://fumen-database.com/difficulty",
+  "difficulty_entries": 1477,
+  "target_rows_without_xlsx": 2226,
+  "rows_with_name_candidate": 546,
+  "unique_candidate_urls": 482,
+  "candidate_urls_used": 482,
+  "page_cache_ok": 476,
+  "page_cache_error": 6,
+  "fetch_errors": 6,
+  "generated": 540,
+  "rejected_combo": 0,
+  "missing_page_stats": 6,
+  "ambiguous": 0,
+  "relaxed_combo": 326,
+  "error_samples": [
+    {
+      "url": "https://fumen-database.com/song/1374-4/",
+      "error": "ValueError: missing fields: complex, avg_density, peak_density, note_type, bpm_change, hs_change, rhythm"
+    },
+    {
+      "url": "https://fumen-database.com/song/1373-4/",
+      "error": "ValueError: missing fields: complex, avg_density, peak_density, note_type, bpm_change, hs_change, rhythm"
+    },
+    {
+      "url": "https://fumen-database.com/song/1376-4/",
+      "error": "ValueError: missing fields: complex, avg_density, peak_density, note_type, bpm_change, hs_change, rhythm"
+    },
+    {
+      "url": "https://fumen-database.com/song/1375-4/",
+      "error": "ValueError: missing fields: complex, avg_density, peak_density, note_type, bpm_change, hs_change, rhythm"
+    },
+    {
+      "url": "https://fumen-database.com/song/1454-4/",
+      "error": "ValueError: missing fields: complex, avg_density, peak_density, note_type, bpm_change, hs_change, rhythm"
+    },
+    {
+      "url": "https://fumen-database.com/song/1461-4/",
+      "error": "ValueError: missing fields: complex, avg_density, peak_density, note_type, bpm_change, hs_change, rhythm"
+    }
+  ]
+}

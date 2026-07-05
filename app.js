@@ -1,7 +1,16 @@
 const API_BASE = "https://kinoko.zorua.cn/api/v1";
-const DATA_VERSION = "20260704-rating-svg";
+const DATA_VERSION = "20260705-pagination-rank-colors";
 const RATING_BEST_COUNT = 20;
-const CHART_RENDER_LIMIT = 800;
+const CHART_PAGE_SIZE = 10;
+
+const RADAR_DIMS = [
+  { key: "power", label: "大歌力" },
+  { key: "stamina", label: "体力" },
+  { key: "speed", label: "高速力" },
+  { key: "accuracy", label: "精度力" },
+  { key: "rhythm", label: "节奏处理" },
+  { key: "complex", label: "复合处理" },
+];
 
 const FIELD_DEFS = [
   { key: "title", label: "曲名", type: "text" },
@@ -40,9 +49,11 @@ const state = {
   rated: [],
   ratingBest: [],
   ratingObjects: [],
+  ratingSummary: { classic: { rating: 0, dimensions: {} }, ura: { rating: 0 }, matchedCount: 0 },
   selectedRatingIndex: null,
   chartBrowserRows: [],
   selectedChartIndex: null,
+  chartPage: 1,
   chartFilters: [],
 };
 
@@ -62,8 +73,6 @@ const els = {
   matchedCount: document.getElementById("matchedCount"),
   ratingSvgWrap: document.getElementById("ratingSvgWrap"),
   ratingDetail: document.getElementById("ratingDetail"),
-  canvas: document.getElementById("ratingCanvas"),
-  imageStatus: document.getElementById("imageStatus"),
   pageTabs: document.querySelectorAll("[data-page-target]"),
   pages: document.querySelectorAll(".page-panel"),
   chartSearchInput: document.getElementById("chartSearchInput"),
@@ -76,7 +85,11 @@ const els = {
   chartBrowserStatus: document.getElementById("chartBrowserStatus"),
   chartResultCount: document.getElementById("chartResultCount"),
   chartTableBody: document.getElementById("chartTableBody"),
-  chartDetail: document.getElementById("chartDetail"),
+  chartPagination: document.getElementById("chartPagination"),
+  chartModal: document.getElementById("chartModal"),
+  chartModalTitle: document.getElementById("chartModalTitle"),
+  chartModalBody: document.getElementById("chartModalBody"),
+  chartModalClose: document.getElementById("chartModalClose"),
 };
 
 function chartKey(songNo, level) {
@@ -110,13 +123,28 @@ function levelName(level) {
 }
 
 function sourceLabel(source, needsEncoder = false) {
-  if (source === "excel") return "xlsx";
-  if (needsEncoder) return "encoder待生成";
-  return source || "encoder";
+  if (source === "excel") return "社区数据";
+  if (source === "fumen") return "网站数据";
+  if (needsEncoder || source === "encoder" || source === "encoder_pending") return "神经网络";
+  return source || "神经网络";
 }
 
 function sourceClass(source) {
-  return source === "excel" ? "excel" : "encoder";
+  if (source === "excel") return "excel";
+  if (source === "fumen") return "fumen";
+  return "encoder";
+}
+
+function sourcePriority(source) {
+  return {
+    excel: 3,
+    fumen: 2,
+    encoder: 1,
+  }[source] ?? 0;
+}
+
+function isEstimatedSource(chart) {
+  return chart.source === "encoder" || chart.source === "encoder_pending" || chart.needs_encoder;
 }
 
 function scoreBonus(score) {
@@ -149,16 +177,25 @@ function getUseEncoder() {
 }
 
 function chartAllowedBySource(chart) {
-  return getUseEncoder() || chart.source === "excel";
+  return getUseEncoder() || !isEstimatedSource(chart);
 }
 
 function hasNumericValue(value) {
   return value !== null && value !== undefined && value !== "" && Number.isFinite(Number(value));
 }
 
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(value, max));
+}
+
+function average(values) {
+  const valid = values.filter((value) => Number.isFinite(value));
+  return valid.length ? valid.reduce((sum, value) => sum + value, 0) / valid.length : 0;
+}
+
 function chartUsableForRating(chart) {
   const scoreLevel = Number(chart.score_level);
-  return chartAllowedBySource(chart) && Number.isFinite(scoreLevel) && hasNumericValue(chart.const);
+  return chartAllowedBySource(chart) && !chart.rating_excluded && Number.isFinite(scoreLevel) && scoreLevel >= 3 && hasNumericValue(chart.const);
 }
 
 function formatScore(value) {
@@ -187,6 +224,11 @@ function formatSingle(value) {
   return Number.isFinite(number) ? number.toFixed(2) : "--";
 }
 
+function formatRatingValue(value) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? number.toFixed(2) : "--";
+}
+
 function rankLabel(score) {
   const s = Number(score || 0);
   if (s >= 1_000_000) return "极";
@@ -195,7 +237,24 @@ function rankLabel(score) {
   if (s >= 800_000) return "金雅";
   if (s >= 750_000) return "银粹";
   if (s >= 700_000) return "过关";
-  return "未通";
+  return "未通过";
+}
+
+function rankColor(score) {
+  const label = rankLabel(score);
+  return {
+    "过关": "#c92a2a",
+    "银粹": "#8f9aa6",
+    "金雅": "#c88a13",
+    "粉雅": "#d65b91",
+    "紫雅": "#7c4dff",
+    "极": "#e03131",
+    "未通过": "#8b949e",
+  }[label] || "#8b949e";
+}
+
+function rankSvgFill(score) {
+  return rankLabel(score) === "极" ? "url(#rankRainbow)" : rankColor(score);
 }
 
 function truncateText(value, maxLength) {
@@ -234,17 +293,29 @@ function indexChartData(charts) {
     };
     const names = [chart.title, ...(chart.aliases || [])].filter(Boolean);
     for (const name of names) {
-      state.constantsByTitle.set(titleKey(name, scoreLevel), indexed);
+      const key = titleKey(name, scoreLevel);
+      if (!state.constantsByTitle.has(key)) {
+        state.constantsByTitle.set(key, []);
+      }
+      state.constantsByTitle.get(key).push(indexed);
     }
+  }
+  for (const chartsForTitle of state.constantsByTitle.values()) {
+    chartsForTitle.sort((a, b) => {
+      const sourceDiff = sourcePriority(b.source) - sourcePriority(a.source);
+      if (sourceDiff) return sourceDiff;
+      return String(a.raw?.display_title || a.title).localeCompare(String(b.raw?.display_title || b.title), "zh-CN");
+    });
   }
 }
 
 function updateChartStatus() {
   const included = state.chartData.filter(chartAllowedBySource);
   const excelCount = included.filter((chart) => chart.source === "excel").length;
-  const encoderCount = included.length - excelCount;
+  const fumenCount = included.filter((chart) => chart.source === "fumen").length;
+  const encoderCount = included.length - excelCount - fumenCount;
   const usableCount = included.filter((chart) => hasNumericValue(chart.const)).length;
-  els.constantsStatus.textContent = `当前启用 ${included.length} 张谱面：xlsx ${excelCount}，encoder ${encoderCount}，可用于 Rating ${usableCount}`;
+  els.constantsStatus.textContent = `当前启用 ${included.length} 张谱面：社区数据 ${excelCount}，网站数据 ${fumenCount}，神经网络 ${encoderCount}，可用于 Rating ${usableCount}`;
 }
 
 async function loadChartData() {
@@ -263,6 +334,32 @@ async function loadChartData() {
   }
 }
 
+function pickChartCandidate(candidates, record) {
+  if (!Array.isArray(candidates) || candidates.length === 0) return null;
+  let best = null;
+  let bestScore = Number.NEGATIVE_INFINITY;
+  for (const chart of candidates) {
+    const chartCombo = Number(chart.combo);
+    const recordCombo = Number(record.combo);
+    let score = sourcePriority(chart.source) * 10000;
+    if (Number.isFinite(chartCombo) && Number.isFinite(recordCombo) && recordCombo > 0) {
+      if (chartCombo >= recordCombo) {
+        if (recordCombo >= chartCombo * 0.85) {
+          score += 1000 - Math.min(999, chartCombo - recordCombo);
+        }
+      } else {
+        score -= 3000 + Math.min(999, recordCombo - chartCombo);
+      }
+    }
+    score -= Number(chart.raw?.duplicate_index || 1) * 0.01;
+    if (score > bestScore) {
+      best = chart;
+      bestScore = score;
+    }
+  }
+  return best;
+}
+
 function findChart(record) {
   const titleCandidates = [
     record.title,
@@ -271,7 +368,7 @@ function findChart(record) {
     ...(record.aliases || []),
   ].filter(Boolean);
   for (const title of titleCandidates) {
-    const chart = state.constantsByTitle.get(titleKey(title, record.level));
+    const chart = pickChartCandidate(state.constantsByTitle.get(titleKey(title, record.level)), record);
     if (chart) return chart;
   }
   return null;
@@ -350,7 +447,7 @@ function calculateRating() {
         ...record,
         chart,
         constant: chart.const,
-        constantTitle: chart.title,
+        constantTitle: chart.raw?.display_title || chart.title,
         chartSource: chart.source,
         needsEncoder: chart.needs_encoder,
         chartCombo: chart.combo,
@@ -364,7 +461,11 @@ function calculateRating() {
 
   state.rated = rated;
   state.ratingBest = rated.filter((row) => Number.isFinite(row.single)).slice(0, RATING_BEST_COUNT);
-  const classicBest = window.TaikoRatingImage?.calculateClassicMetrics?.(rated)?.b20 || [];
+  const classicMetrics = window.TaikoRatingImage?.calculateClassicMetrics?.(rated) || { b20: [], rating: 0, dimensions: {} };
+  const uraRating = average(state.ratingBest.map((row) => row.single));
+  const classicBest = classicMetrics.b20 || [];
+  els.classicRatingValue.textContent = formatRatingValue(classicMetrics.rating);
+  els.ratingValue.textContent = formatRatingValue(uraRating);
   state.ratingObjects = [
     ...state.ratingBest.map((row) => ({ mode: "里", row, displaySingle: row.single })),
     ...classicBest.map((row) => ({ mode: "表", row, displaySingle: row.classicSingle })),
@@ -374,12 +475,59 @@ function calculateRating() {
 
   els.recordCount.textContent = String(bestRecords.length);
   els.matchedCount.textContent = String(rated.length);
+  state.ratingSummary = {
+    classic: classicMetrics,
+    ura: { rating: uraRating },
+    matchedCount: rated.length,
+  };
   renderRatingTable();
   renderRatingDetail(state.selectedRatingIndex == null ? null : state.ratingObjects[state.selectedRatingIndex]);
-  renderCanvas(rated);
 }
 
-function renderRatingTable() {
+function radarSvg(dimensions, x, y, radius, color) {
+  const values = RADAR_DIMS.map((dim) => Number(dimensions?.[dim.key]) || 0);
+  const positive = values.filter((value) => value > 0);
+  const minAxis = Math.max(0, (positive.length ? Math.min(...positive) : 0) - 1);
+  const maxAxis = Math.max(minAxis + 1, Math.max(...values, 1) + 0.6);
+  const point = (index, r) => {
+    const angle = -Math.PI / 2 + (Math.PI * 2 * index) / RADAR_DIMS.length;
+    return [x + Math.cos(angle) * r, y + Math.sin(angle) * r];
+  };
+  const polygon = (points) => points.map(([px, py]) => `${px.toFixed(1)},${py.toFixed(1)}`).join(" ");
+  const rings = [1, 2, 3, 4, 5]
+    .map((ring) => {
+      const r = (radius * ring) / 5;
+      return `<polygon points="${polygon(RADAR_DIMS.map((_, index) => point(index, r)))}" fill="none" stroke="#d9dee5" stroke-width="1" />`;
+    })
+    .join("");
+  const axes = RADAR_DIMS.map((_, index) => {
+    const [px, py] = point(index, radius);
+    return `<line x1="${x}" y1="${y}" x2="${px.toFixed(1)}" y2="${py.toFixed(1)}" stroke="#d9dee5" stroke-width="1" />`;
+  }).join("");
+  const dataPoints = RADAR_DIMS.map((dim, index) => {
+    const value = clamp(((Number(dimensions?.[dim.key]) || 0) - minAxis) / (maxAxis - minAxis), 0, 1);
+    return point(index, value * radius);
+  });
+  const labels = RADAR_DIMS.map((dim, index) => {
+    const [lx, ly] = point(index, radius + 42);
+    const anchor = lx < x - 10 ? "end" : lx > x + 10 ? "start" : "middle";
+    return `
+      <text x="${lx.toFixed(1)}" y="${(ly - 2).toFixed(1)}" font-size="13" font-weight="700" fill="#4d5660" text-anchor="${anchor}">${escapeHtml(dim.label)}</text>
+      <text x="${lx.toFixed(1)}" y="${(ly + 16).toFixed(1)}" font-size="12" fill="#66717d" text-anchor="${anchor}">${escapeHtml(formatRatingValue(dimensions?.[dim.key]))}</text>
+    `;
+  }).join("");
+
+  return `
+    <g>
+      ${rings}
+      ${axes}
+      <polygon points="${polygon(dataPoints)}" fill="${color}" fill-opacity="0.15" stroke="${color}" stroke-width="3" />
+      ${labels}
+    </g>
+  `;
+}
+
+function renderRatingTable(summary = state.ratingSummary) {
   const rows = state.ratingObjects;
   if (!rows.length) {
     els.ratingSvgWrap.className = "rating-svg-wrap muted-box";
@@ -387,18 +535,43 @@ function renderRatingTable() {
     return;
   }
 
-  const width = 1400;
-  const height = 1210;
+  const width = 1900;
+  const height = 1760;
   const margin = 34;
   const gap = 28;
   const columnWidth = (width - margin * 2 - gap) / 2;
-  const rowHeight = 46;
-  const rowGap = 7;
+  const rowHeight = 58;
+  const rowGap = 5;
   const headerHeight = 106;
+  const sectionY = 330;
   const sections = [
-    { mode: "里", title: "里 Rating B20", subtitle: "新公式：定数 + 分数补正", x: margin, color: "#246f92" },
-    { mode: "表", title: "表 Rating B20", subtitle: "旧公式：定数得点 x 良率表现", x: margin + columnWidth + gap, color: "#a23b35" },
+    { mode: "里", title: "里 Rating B20", subtitle: "新公式：定数 + 分数补正", x: margin, color: "#246f92", total: summary.ura?.rating },
+    { mode: "表", title: "表 Rating B20", subtitle: "旧公式：定数得点 x 良率表现", x: margin + columnWidth + gap, color: "#a23b35", total: summary.classic?.rating },
   ];
+  const topCards = `
+    <g>
+      <rect x="${margin}" y="44" width="340" height="118" rx="8" fill="#f2f8fb" stroke="#d0dde4" />
+      <text x="${margin + 24}" y="86" font-size="20" font-weight="800" fill="#246f92">里 Rating 总分</text>
+      <text x="${margin + 316}" y="126" font-size="42" font-weight="800" fill="#246f92" text-anchor="end">${escapeHtml(formatRatingValue(summary.ura?.rating))}</text>
+
+      <rect x="${margin}" y="186" width="340" height="100" rx="8" fill="#fff7f4" stroke="#e6d7d1" />
+      <text x="${margin + 24}" y="226" font-size="20" font-weight="800" fill="#a23b35">表 Rating 总分</text>
+      <text x="${margin + 316}" y="258" font-size="38" font-weight="800" fill="#a23b35" text-anchor="end">${escapeHtml(formatRatingValue(summary.classic?.rating))}</text>
+
+      <rect x="${margin + 370}" y="44" width="260" height="242" rx="8" fill="#ffffff" stroke="#d9dee5" />
+      <text x="${margin + 394}" y="88" font-size="20" font-weight="800" fill="#20252b">匹配谱面</text>
+      <text x="${margin + 606}" y="158" font-size="58" font-weight="800" fill="#20252b" text-anchor="end">${escapeHtml(summary.matchedCount ?? 0)}</text>
+      <text x="${margin + 394}" y="218" font-size="15" fill="#66717d">表/里 Rating 均按 B20 计算</text>
+      <text x="${margin + 394}" y="246" font-size="15" fill="#66717d">竹难度特殊谱面不计入</text>
+    </g>
+  `;
+  const radarBlock = `
+    <g>
+      <text x="1110" y="72" font-size="28" font-weight="800" fill="#20252b">六维 Rating</text>
+      <text x="1112" y="104" font-size="16" fill="#66717d">按旧公式各维度分别取 B20 平均</text>
+      ${radarSvg(summary.classic?.dimensions || {}, 1510, 170, 96, "#a23b35")}
+    </g>
+  `;
 
   const sectionSvg = sections
     .map(
@@ -407,7 +580,7 @@ function renderRatingTable() {
           .map((item, index) => ({ item, index }))
           .filter((entry) => entry.item.mode === section.mode)
           .slice(0, RATING_BEST_COUNT);
-        const y = 30;
+        const y = sectionY;
         const rowSvg = entries
           .map((entry, rankIndex) => {
             const item = entry.item;
@@ -416,9 +589,13 @@ function renderRatingTable() {
             const selected = state.selectedRatingIndex === entry.index;
             const fill = selected ? "#eef7fb" : "#ffffff";
             const stroke = selected ? section.color : "#d9dee5";
-            const title = escapeHtml(truncateText(row.title, 23));
+            const title = escapeHtml(truncateText(row.title, 28));
+            const matchedTitle = escapeHtml(truncateText(row.constantTitle, 32));
             const source = escapeHtml(sourceLabel(row.chartSource, row.needsEncoder));
-            const subtitle = escapeHtml(`${levelName(row.level)} · ${source} · ${formatScore(row.highScore)} · ${rankLabel(row.highScore)}`);
+            const subtitle = escapeHtml(`${levelName(row.level)} · ${source}`);
+            const score = escapeHtml(formatScore(row.highScore));
+            const rank = escapeHtml(rankLabel(row.highScore));
+            const rankFill = rankSvgFill(row.highScore);
             const single = escapeHtml(formatSingle(item.displaySingle));
             const constant = escapeHtml(Number(row.constant).toFixed(1));
             const bonus = escapeHtml(formatBonus(row.bonus));
@@ -426,25 +603,31 @@ function renderRatingTable() {
               <g class="rating-svg-row" data-rating-index="${entry.index}" tabindex="0" role="button">
                 <rect x="${section.x}" y="${rowY}" width="${columnWidth}" height="${rowHeight}" rx="8" fill="${fill}" stroke="${stroke}" stroke-width="${selected ? 2 : 1}" />
                 <rect x="${section.x}" y="${rowY}" width="5" height="${rowHeight}" rx="2" fill="${section.color}" />
-                <text x="${section.x + 18}" y="${rowY + 29}" font-size="17" font-weight="700" fill="#8b949e">${String(rankIndex + 1).padStart(2, "0")}</text>
-                <text x="${section.x + 58}" y="${rowY + 22}" font-size="17" font-weight="700" fill="#20252b">${title}</text>
-                <text x="${section.x + 58}" y="${rowY + 40}" font-size="12" fill="#66717d">${subtitle}</text>
-                <text x="${section.x + columnWidth - 212}" y="${rowY + 29}" font-size="16" font-weight="700" fill="#20252b" text-anchor="end">${constant}</text>
-                <text x="${section.x + columnWidth - 134}" y="${rowY + 29}" font-size="15" fill="#66717d" text-anchor="end">${bonus}</text>
-                <text x="${section.x + columnWidth - 20}" y="${rowY + 30}" font-size="22" font-weight="800" fill="${section.color}" text-anchor="end">${single}</text>
+                <text x="${section.x + 18}" y="${rowY + 31}" font-size="17" font-weight="700" fill="#8b949e">${String(rankIndex + 1).padStart(2, "0")}</text>
+                <text x="${section.x + 58}" y="${rowY + 20}" font-size="16" font-weight="700" fill="#20252b">${title}</text>
+                <text x="${section.x + 58}" y="${rowY + 38}" font-size="12" fill="#66717d">匹配：${matchedTitle}</text>
+                <text x="${section.x + 58}" y="${rowY + 52}" font-size="11" fill="#8b949e">${subtitle}</text>
+                <text x="${section.x + columnWidth - 468}" y="${rowY + 31}" font-size="15" font-weight="700" fill="#20252b" text-anchor="end">${score}</text>
+                <text x="${section.x + columnWidth - 358}" y="${rowY + 31}" font-size="15" font-weight="800" fill="${rankFill}" text-anchor="end">${rank}</text>
+                <text x="${section.x + columnWidth - 262}" y="${rowY + 31}" font-size="16" font-weight="700" fill="#20252b" text-anchor="end">${constant}</text>
+                <text x="${section.x + columnWidth - 162}" y="${rowY + 31}" font-size="15" fill="#66717d" text-anchor="end">${bonus}</text>
+                <text x="${section.x + columnWidth - 22}" y="${rowY + 32}" font-size="22" font-weight="800" fill="${section.color}" text-anchor="end">${single}</text>
               </g>
             `;
           })
           .join("");
         return `
           <g>
-            <rect x="${section.x}" y="${y}" width="${columnWidth}" height="${height - 60}" rx="10" fill="#fbfcfd" stroke="#d9dee5" />
+            <rect x="${section.x}" y="${y}" width="${columnWidth}" height="${height - y - 30}" rx="10" fill="#fbfcfd" stroke="#d9dee5" />
             <text x="${section.x + 22}" y="${y + 40}" font-size="28" font-weight="800" fill="${section.color}">${section.title}</text>
             <text x="${section.x + 22}" y="${y + 70}" font-size="16" fill="#66717d">${section.subtitle}</text>
-            <text x="${section.x + columnWidth - 20}" y="${y + 40}" font-size="18" font-weight="700" fill="#66717d" text-anchor="end">B20</text>
-            <text x="${section.x + columnWidth - 214}" y="${y + 95}" font-size="12" fill="#8b949e" text-anchor="end">定数</text>
-            <text x="${section.x + columnWidth - 134}" y="${y + 95}" font-size="12" fill="#8b949e" text-anchor="end">补正</text>
-            <text x="${section.x + columnWidth - 20}" y="${y + 95}" font-size="12" fill="#8b949e" text-anchor="end">单曲R</text>
+            <text x="${section.x + columnWidth - 22}" y="${y + 40}" font-size="30" font-weight="800" fill="${section.color}" text-anchor="end">${escapeHtml(formatRatingValue(section.total))}</text>
+            <text x="${section.x + columnWidth - 22}" y="${y + 68}" font-size="14" fill="#66717d" text-anchor="end">总分 / B20</text>
+            <text x="${section.x + columnWidth - 468}" y="${y + 95}" font-size="12" fill="#8b949e" text-anchor="end">总分</text>
+            <text x="${section.x + columnWidth - 358}" y="${y + 95}" font-size="12" fill="#8b949e" text-anchor="end">评价</text>
+            <text x="${section.x + columnWidth - 262}" y="${y + 95}" font-size="12" fill="#8b949e" text-anchor="end">定数</text>
+            <text x="${section.x + columnWidth - 162}" y="${y + 95}" font-size="12" fill="#8b949e" text-anchor="end">补正</text>
+            <text x="${section.x + columnWidth - 22}" y="${y + 95}" font-size="12" fill="#8b949e" text-anchor="end">单曲R</text>
             ${rowSvg}
           </g>
         `;
@@ -455,8 +638,20 @@ function renderRatingTable() {
   els.ratingSvgWrap.className = "rating-svg-wrap";
   els.ratingSvgWrap.innerHTML = `
     <svg id="ratingObjectSvg" class="rating-object-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" role="img" aria-label="Rating B20">
+      <defs>
+        <linearGradient id="rankRainbow" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stop-color="#e03131" />
+          <stop offset="18%" stop-color="#f08c00" />
+          <stop offset="36%" stop-color="#f2c94c" />
+          <stop offset="54%" stop-color="#2f9e44" />
+          <stop offset="72%" stop-color="#1971c2" />
+          <stop offset="100%" stop-color="#9c36b5" />
+        </linearGradient>
+      </defs>
       <rect width="${width}" height="${height}" fill="#f7fafc" />
       <text x="${margin}" y="24" font-size="14" fill="#66717d">点击任意歌曲查看详细数值</text>
+      ${topCards}
+      ${radarBlock}
       ${sectionSvg}
     </svg>
   `;
@@ -510,14 +705,6 @@ function renderRatingDetail(item) {
     .join("")}</div>`;
 }
 
-function renderCanvas(allRows) {
-  if (!window.TaikoRatingImage) return;
-  const metrics = window.TaikoRatingImage.renderRatingImage(els.canvas, { allRows });
-  els.classicRatingValue.textContent = metrics.classic.rating ? metrics.classic.rating.toFixed(2) : "--";
-  els.ratingValue.textContent = metrics.ura.rating ? metrics.ura.rating.toFixed(2) : "--";
-  els.imageStatus.textContent = allRows.length ? "已生成" : "未生成";
-}
-
 async function fetchScores() {
   const token = els.apiKeyInput.value.trim();
   const playerId = els.playerIdInput.value.trim();
@@ -557,7 +744,7 @@ async function fetchScores() {
 function getChartValue(chart, field) {
   const f = chart.features || {};
   const values = {
-    title: chart.title,
+    title: chart.display_title || chart.title,
     course: chart.course,
     level: chart.level,
     const: chart.const,
@@ -577,7 +764,17 @@ function getChartValue(chart, field) {
 }
 
 function getChartSearchText(chart) {
-  return [chart.id, chart.title, chart.title_normalized, chart.course, chart.course_label, ...(chart.aliases || [])]
+  return [
+    chart.id,
+    chart.title,
+    chart.display_title,
+    chart.variant_label,
+    chart.title_normalized,
+    chart.course,
+    chart.course_label,
+    chart.fumen?.url,
+    ...(chart.aliases || []),
+  ]
     .filter(Boolean)
     .join(" ")
     .toLowerCase();
@@ -634,6 +831,38 @@ function sortCharts(rows) {
   });
 }
 
+function renderChartPagination(totalPages) {
+  if (!els.chartPagination) return;
+  if (totalPages <= 1) {
+    els.chartPagination.innerHTML = "";
+    return;
+  }
+
+  const current = state.chartPage;
+  const pages = new Set([1, totalPages, current - 1, current, current + 1]);
+  const pageButtons = [...pages]
+    .filter((page) => page >= 1 && page <= totalPages)
+    .sort((a, b) => a - b);
+
+  const controls = [];
+  controls.push(`<button type="button" data-chart-page="prev" ${current <= 1 ? "disabled" : ""}>上一页</button>`);
+  let previous = 0;
+  for (const page of pageButtons) {
+    if (page - previous > 1) controls.push(`<span class="pagination-gap">...</span>`);
+    controls.push(
+      `<button type="button" data-chart-page="${page}" class="${page === current ? "is-active" : ""}" ${page === current ? 'aria-current="page"' : ""}>${page}</button>`,
+    );
+    previous = page;
+  }
+  controls.push(`<button type="button" data-chart-page="next" ${current >= totalPages ? "disabled" : ""}>下一页</button>`);
+  els.chartPagination.innerHTML = controls.join("");
+}
+
+function resetChartBrowserPage() {
+  state.chartPage = 1;
+  renderChartBrowser();
+}
+
 function renderChartBrowser() {
   const search = els.chartSearchInput.value.trim().toLowerCase();
   const course = els.chartCourseSelect.value;
@@ -646,11 +875,17 @@ function renderChartBrowser() {
   );
 
   state.chartBrowserRows = rows;
-  const visibleRows = rows.slice(0, CHART_RENDER_LIMIT);
+  const totalPages = Math.max(1, Math.ceil(rows.length / CHART_PAGE_SIZE));
+  state.chartPage = clamp(Math.trunc(state.chartPage || 1), 1, totalPages);
+  const pageStart = (state.chartPage - 1) * CHART_PAGE_SIZE;
+  const visibleRows = rows.slice(pageStart, pageStart + CHART_PAGE_SIZE);
   els.chartBrowserStatus.textContent = getUseEncoder()
-    ? "当前数据范围：xlsx + encoder"
-    : "当前数据范围：仅 xlsx";
-  els.chartResultCount.textContent = `命中 ${rows.length} 张，显示 ${visibleRows.length} 张`;
+    ? "当前数据范围：社区数据 + 网站数据 + 神经网络"
+    : "当前数据范围：社区数据 + 网站数据";
+  const rangeStart = rows.length ? pageStart + 1 : 0;
+  const rangeEnd = rows.length ? pageStart + visibleRows.length : 0;
+  els.chartResultCount.textContent = `命中 ${rows.length} 张，第 ${state.chartPage}/${totalPages} 页，显示 ${rangeStart}-${rangeEnd}`;
+  renderChartPagination(totalPages);
 
   if (!visibleRows.length) {
     els.chartTableBody.innerHTML = '<tr><td colspan="12" class="empty-cell">没有符合条件的谱面</td></tr>';
@@ -659,10 +894,11 @@ function renderChartBrowser() {
 
   els.chartTableBody.innerHTML = visibleRows
     .map((chart, index) => {
+      const globalIndex = pageStart + index;
       const f = chart.features || {};
       return `
-        <tr class="clickable-row ${state.selectedChartIndex === index ? "is-selected" : ""}" data-chart-index="${index}">
-          <td>${escapeHtml(chart.title)}</td>
+        <tr class="clickable-row ${state.selectedChartIndex === globalIndex ? "is-selected" : ""}" data-chart-index="${globalIndex}">
+          <td>${escapeHtml(chart.display_title || chart.title)}</td>
           <td>${escapeHtml(chart.course_label || chart.course)}</td>
           <td class="numeric">${formatLoose(chart.level, 0)}</td>
           <td class="numeric">${formatLoose(chart.const, 1)}</td>
@@ -680,15 +916,43 @@ function renderChartBrowser() {
     .join("");
 }
 
-function renderChartDetail(chart) {
-  if (!chart) {
-    els.chartDetail.className = "detail-panel muted-box";
-    els.chartDetail.textContent = "点击谱面列表中的行查看 JSON 数据";
-    return;
+function renderPreviewImages(chart) {
+  const images = Array.isArray(chart.preview_images) ? chart.preview_images.slice(0, 2) : [];
+  if (!images.length) {
+    return '<div class="muted-box preview-empty">暂无谱面预览</div>';
   }
+  return `
+    <div class="preview-images">
+      ${images
+        .map((image, index) => {
+          const size = image.width && image.height ? `${image.width} x ${image.height}` : "谱面预览";
+          const caption = image.alt || `谱面预览 ${index + 1}`;
+          return `
+            <figure class="preview-figure">
+              <img
+                src="${escapeHtml(image.url)}"
+                alt="${escapeHtml(`${chart.display_title || chart.title} ${caption}`)}"
+                loading="lazy"
+                referrerpolicy="no-referrer"
+                crossorigin="anonymous"
+              />
+              <figcaption>
+                <span>${escapeHtml(caption)}</span>
+                <span>${escapeHtml(size)}</span>
+              </figcaption>
+            </figure>
+          `;
+        })
+        .join("")}
+    </div>
+  `;
+}
+
+function renderChartModalBody(chart) {
   const f = chart.features || {};
   const items = [
-    ["曲名", chart.title],
+    ["曲名", chart.display_title || chart.title],
+    ["原曲名", chart.title],
     ["难度", chart.course_label || chart.course],
     ["星级", formatLoose(chart.level, 0)],
     ["定数", formatLoose(chart.const, 1)],
@@ -703,15 +967,46 @@ function renderChartDetail(chart) {
     ["节奏处理", formatLoose(f.rhythm)],
     ["连打时长", formatLoose(chart.roll_time)],
     ["气球数", formatLoose(chart.balloon_num, 0)],
+    ["Rating计入", chart.rating_excluded ? "不计入" : "计入"],
+    ["排除原因", chart.rating_exclusion_reason || "--"],
+    ["重名组", chart.duplicate_group_size > 1 ? `${chart.duplicate_index}/${chart.duplicate_group_size}` : "--"],
+    ["预览匹配", chart.wiki_preview?.matched_name || "--"],
+    ["预览页面", chart.wiki_preview?.source_page || "--"],
+    ["网站", chart.fumen?.url || "--"],
     ["路径", chart.ese?.path || "--"],
   ];
-  els.chartDetail.className = "detail-panel";
-  els.chartDetail.innerHTML = `
-    <div class="detail-grid">${items
-      .map(([label, value]) => `<div class="detail-item"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`)
-      .join("")}</div>
-    <pre class="json-block">${escapeHtml(JSON.stringify(chart, null, 2))}</pre>
+  return `
+    <section class="modal-section">
+      <h3>谱面预览</h3>
+      ${renderPreviewImages(chart)}
+    </section>
+    <section class="modal-section">
+      <h3>数值</h3>
+      <div class="detail-grid">${items
+        .map(([label, value]) => `<div class="detail-item"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`)
+        .join("")}</div>
+    </section>
+    <section class="modal-section">
+      <h3>JSON</h3>
+      <pre class="json-block">${escapeHtml(JSON.stringify(chart, null, 2))}</pre>
+    </section>
   `;
+}
+
+function openChartModal(chart) {
+  if (!chart || !els.chartModal) return;
+  els.chartModalTitle.textContent = `${chart.display_title || chart.title} / ${chart.course_label || chart.course}`;
+  els.chartModalBody.innerHTML = renderChartModalBody(chart);
+  els.chartModal.hidden = false;
+  document.body.classList.add("modal-open");
+  els.chartModalClose?.focus();
+}
+
+function closeChartModal() {
+  if (!els.chartModal || els.chartModal.hidden) return;
+  els.chartModal.hidden = true;
+  els.chartModalBody.innerHTML = "";
+  document.body.classList.remove("modal-open");
 }
 
 function renderFilterRows() {
@@ -788,48 +1083,17 @@ function switchPage(pageId) {
   }
 }
 
-function exportSvgAsPng(svg) {
-  const clone = svg.cloneNode(true);
-  clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
-  const viewBox = svg.viewBox.baseVal;
-  const width = viewBox?.width || Number(svg.getAttribute("width")) || 1400;
-  const height = viewBox?.height || Number(svg.getAttribute("height")) || 1210;
-  clone.setAttribute("width", String(width));
-  clone.setAttribute("height", String(height));
-
-  const source = new XMLSerializer().serializeToString(clone);
-  const blob = new Blob([source], { type: "image/svg+xml;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const image = new Image();
-  image.onload = () => {
-    const canvas = document.createElement("canvas");
-    canvas.width = width;
-    canvas.height = height;
-    const ctx = canvas.getContext("2d");
-    ctx.drawImage(image, 0, 0, width, height);
-    URL.revokeObjectURL(url);
-    const link = document.createElement("a");
-    link.download = `taiko-rating-b20-${Date.now()}.png`;
-    link.href = canvas.toDataURL("image/png");
-    link.click();
-  };
-  image.onerror = () => {
-    URL.revokeObjectURL(url);
-    els.imageStatus.textContent = "SVG 导出失败";
-  };
-  image.src = url;
-}
-
 function exportPng() {
   calculateRating();
-  const svg = document.getElementById("ratingObjectSvg");
-  if (svg) {
-    exportSvgAsPng(svg);
+  if (!window.TaikoRatingImage?.renderRatingImage) {
+    els.fetchStatus.textContent = "图片导出模块未载入";
     return;
   }
+  const canvas = document.createElement("canvas");
+  window.TaikoRatingImage.renderRatingImage(canvas, { allRows: state.rated });
   const link = document.createElement("a");
-  link.download = `taiko-rating-${Date.now()}.png`;
-  link.href = els.canvas.toDataURL("image/png");
+  link.download = `taiko-rating-preview-${Date.now()}.png`;
+  link.href = canvas.toDataURL("image/png");
   link.click();
 }
 
@@ -841,9 +1105,10 @@ els.useEncoderInput.addEventListener("change", () => {
   indexChartData(state.chartData);
   updateChartStatus();
   state.selectedRatingIndex = null;
+  state.chartPage = 1;
   calculateRating();
   renderChartBrowser();
-  renderChartDetail(null);
+  closeChartModal();
 });
 
 els.ratingSvgWrap.addEventListener("click", (event) => {
@@ -869,7 +1134,33 @@ els.chartTableBody.addEventListener("click", (event) => {
   if (!row) return;
   state.selectedChartIndex = Number(row.dataset.chartIndex);
   renderChartBrowser();
-  renderChartDetail(state.chartBrowserRows[state.selectedChartIndex]);
+  openChartModal(state.chartBrowserRows[state.selectedChartIndex]);
+});
+
+els.chartPagination?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-chart-page]");
+  if (!button || button.disabled) return;
+  const target = button.dataset.chartPage;
+  const totalPages = Math.max(1, Math.ceil(state.chartBrowserRows.length / CHART_PAGE_SIZE));
+  if (target === "prev") state.chartPage -= 1;
+  else if (target === "next") state.chartPage += 1;
+  else state.chartPage = Number(target);
+  state.chartPage = clamp(Math.trunc(state.chartPage || 1), 1, totalPages);
+  renderChartBrowser();
+});
+
+els.chartModalClose?.addEventListener("click", closeChartModal);
+
+els.chartModal?.addEventListener("click", (event) => {
+  if (event.target === els.chartModal) {
+    closeChartModal();
+  }
+});
+
+window.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    closeChartModal();
+  }
 });
 
 for (const tab of els.pageTabs) {
@@ -884,33 +1175,33 @@ window.addEventListener("hashchange", () => {
 });
 
 for (const control of [els.chartSearchInput, els.chartCourseSelect, els.chartSortField, els.chartSortDir]) {
-  control.addEventListener("input", renderChartBrowser);
-  control.addEventListener("change", renderChartBrowser);
+  control.addEventListener("input", resetChartBrowserPage);
+  control.addEventListener("change", resetChartBrowserPage);
 }
 
 els.addFilterButton.addEventListener("click", () => {
   addFilter();
-  renderChartBrowser();
+  resetChartBrowserPage();
 });
 
 els.clearFiltersButton.addEventListener("click", () => {
   state.chartFilters = [];
   renderFilterRows();
-  renderChartBrowser();
+  resetChartBrowserPage();
 });
 
 els.filterRows.addEventListener("input", (event) => {
   const row = event.target.closest(".filter-row");
   if (!row) return;
   updateFilterFromRow(row);
-  renderChartBrowser();
+  resetChartBrowserPage();
 });
 
 els.filterRows.addEventListener("change", (event) => {
   const row = event.target.closest(".filter-row");
   if (!row) return;
   updateFilterFromRow(row);
-  renderChartBrowser();
+  resetChartBrowserPage();
 });
 
 els.filterRows.addEventListener("click", (event) => {
@@ -919,12 +1210,11 @@ els.filterRows.addEventListener("click", (event) => {
   const row = button.closest(".filter-row");
   state.chartFilters = state.chartFilters.filter((filter) => filter.id !== row.dataset.filterId);
   renderFilterRows();
-  renderChartBrowser();
+  resetChartBrowserPage();
 });
 
 populateControls();
 if (location.hash.slice(1) === "dataPage") {
   switchPage("dataPage");
 }
-renderCanvas([]);
 loadChartData();
