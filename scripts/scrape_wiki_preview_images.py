@@ -367,8 +367,9 @@ def fetch_preview(
             images = parse_source_images(html, page, source_page, max_images=max_images)
         else:
             images = parse_images(html, source_page, max_images=max_images)
+        payload = {key: value for key, value in record.items() if key != "error"}
         return record_id, {
-            **record,
+            **payload,
             "status": "ok" if images else "no_images",
             "images": images,
             "fetch_mode": fetch_mode,
