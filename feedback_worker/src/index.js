@@ -1,5 +1,8 @@
 const ALLOWED_ORIGINS = new Set([
   "https://mmtumr.github.io",
+  "https://mmt.qd.je",
+  "https://taiko.mmt.qd.je",
+  "https://www.mmt.qd.je",
   "http://127.0.0.1:8000",
   "http://localhost:8000",
 ]);
@@ -17,9 +20,25 @@ const ALLOWED_FIELDS = new Set([
 
 const ALLOWED_VOTES = new Set(["too_high", "too_low"]);
 
+function isAllowedOrigin(origin) {
+  if (ALLOWED_ORIGINS.has(origin)) return true;
+  try {
+    const url = new URL(origin);
+    if (url.protocol === "https:" && (url.hostname === "mmt.qd.je" || url.hostname.endsWith(".mmt.qd.je"))) {
+      return true;
+    }
+    if (url.protocol === "http:" && ["localhost", "127.0.0.1"].includes(url.hostname)) {
+      return true;
+    }
+  } catch {
+    return false;
+  }
+  return false;
+}
+
 function corsHeaders(request) {
   const origin = request.headers.get("Origin") || "";
-  const allowOrigin = ALLOWED_ORIGINS.has(origin) ? origin : "https://mmtumr.github.io";
+  const allowOrigin = isAllowedOrigin(origin) ? origin : "https://mmtumr.github.io";
   return {
     "Access-Control-Allow-Origin": allowOrigin,
     "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
