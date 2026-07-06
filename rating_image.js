@@ -340,16 +340,13 @@
 
   function drawHeader(ctx, classic, ura, matchedCount) {
     drawText(ctx, "Taiko Rating", 96, 116, { size: 42, weight: "700", color: "#202225" });
-    drawText(ctx, "表 rating 固定除以 B20，里 rating 仅 clear_cnt > 0 且固定除以 B30", 98, 156, { size: 22, color: "#7b7470" });
 
     fillRounded(ctx, 96, 210, 470, 142, 8, "#fff7f4", "#e6d7d1");
     drawText(ctx, "表 Rating", 126, 260, { size: 27, weight: "700", color: "#a23b35" });
-    drawText(ctx, "旧社区公式 · B20", 126, 294, { size: 18, color: "#8c7e79" });
     drawText(ctx, formatNumber(classic.rating), 520, 292, { size: 58, weight: "700", color: "#a23b35", align: "right", baseline: "middle" });
 
     fillRounded(ctx, 96, 382, 470, 142, 8, "#f2f8fb", "#d0dde4");
     drawText(ctx, "里 Rating", 126, 432, { size: 27, weight: "700", color: "#246f92" });
-    drawText(ctx, "新公式 · B30", 126, 466, { size: 18, color: "#718089" });
     drawText(ctx, formatNumber(ura.rating), 520, 464, { size: 58, weight: "700", color: "#246f92", align: "right", baseline: "middle" });
 
     fillRounded(ctx, 96, 554, 470, 92, 8, "#ffffff", "#ded8d1");
@@ -367,7 +364,6 @@
     const maxAxis = Math.max(minAxis + 1, Math.max(...values, 1) + 0.6);
 
     drawText(ctx, "六维 Rating", 760, 116, { size: 32, weight: "700", color: "#202225" });
-    drawText(ctx, "按各维度单独取 B20，缺项按 0 补位", 762, 156, { size: 20, color: "#7b7470" });
 
     ctx.strokeStyle = "#ded8d1";
     ctx.lineWidth = 1.2;
@@ -423,15 +419,14 @@
     });
   }
 
-  function drawSection(ctx, title, subtitle, rows, y, mode) {
+  function drawSection(ctx, title, rows, y, mode) {
     fillRounded(ctx, 78, y, IMAGE_W - 156, 520, 8, "#ffffff", "#ded8d1");
     drawText(ctx, title, 116, y + 54, { size: 30, weight: "700", color: "#2b2826" });
-    drawText(ctx, subtitle, 116, y + 88, { size: 19, color: "#7b7470" });
 
     const cardW = 236;
     const cardH = 54;
     const startX = 102;
-    const startY = y + 122;
+    const startY = y + 98;
     const gapX = 16;
     const gapY = 10;
     rows.forEach((row, index) => {
@@ -489,14 +484,8 @@
     drawBackground(ctx);
     drawHeader(ctx, classic, ura, classicRows.length);
     drawRadar(ctx, classic.dimensions);
-    drawSection(ctx, "表 Rating B20", "旧社区公式：定数得点 x 良率表现，固定除以 20", classic.b20, 730, "classic");
-    drawSection(ctx, "里 Rating B30", "仅 clear_cnt > 0：谱面定数 + 分数补正，固定除以 30", ura.b30, 1280, "new");
-    drawText(ctx, "Taiko Rating System | 由菌菌成绩与本地谱面库生成", IMAGE_W / 2, IMAGE_H - 74, {
-      size: 22,
-      color: "#aaa19b",
-      align: "center",
-      baseline: "middle",
-    });
+    drawSection(ctx, "表 Rating B20", classic.b20, 730, "classic");
+    drawSection(ctx, "里 Rating B30", ura.b30, 1280, "new");
 
     return {
       classic,

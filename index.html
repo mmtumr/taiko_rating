@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Taiko Rating</title>
-    <link rel="stylesheet" href="styles.css?v=20260706-preview-player-balloon" />
+    <link rel="stylesheet" href="styles.css?v=20260706-alias-dedupe" />
   </head>
   <body>
     <main class="app-shell">
@@ -41,6 +41,7 @@
 
       <nav class="page-tabs" aria-label="页面">
         <button class="is-active" type="button" data-page-target="ratingPage">Rating 系统</button>
+        <button type="button" data-page-target="recommendPage">进步推荐</button>
         <button type="button" data-page-target="dataPage">谱面数据</button>
       </nav>
 
@@ -69,6 +70,7 @@
                   </select>
                 </label>
               </div>
+              <p class="api-credit">Player ID 可留空；只有需要查询指定玩家或接口要求指定玩家时再填写。</p>
               <p class="api-credit">
                 查分由
                 <a href="https://kinoko.zorua.cn/account?tab=public" target="_blank" rel="noopener noreferrer">菌菌 API</a>
@@ -88,7 +90,8 @@
               <div class="panel-head">
                 <h2>Rating B20 / B30</h2>
                 <div class="button-row rating-actions">
-                  <button id="curveButton" type="button">查看规则曲线</button>
+                  <button id="curveButton" type="button">里 Rating 规则</button>
+                  <button id="classicRuleButton" type="button">表 Rating 规则</button>
                   <button id="recalculateButton" type="button">刷新</button>
                   <button id="exportButton" type="button">下载 PNG</button>
                 </div>
@@ -104,6 +107,68 @@
             </section>
           </section>
         </div>
+      </section>
+
+      <section id="recommendPage" class="page-panel">
+        <section class="panel">
+          <div class="panel-head">
+            <h2>进步推荐</h2>
+            <button id="recommendRefreshButton" type="button">刷新推荐</button>
+          </div>
+          <div class="recommend-controls">
+            <label>
+              练习对象
+              <select id="recommendTargetSelect">
+                <option value="auto">自动判断</option>
+                <option value="power">大歌力</option>
+                <option value="stamina">体力</option>
+                <option value="speed">高速力</option>
+                <option value="accuracy">精度力</option>
+                <option value="rhythm">节奏处理</option>
+                <option value="complex">复合处理</option>
+              </select>
+            </label>
+            <label class="toggle-line recommend-toggle">
+              <input id="recommendEncoderInput" type="checkbox" />
+              推荐神经网络数据
+            </label>
+            <label class="toggle-line recommend-toggle">
+              <input id="recommendLowDifficultyInput" type="checkbox" disabled />
+              允许松以下难度
+            </label>
+          </div>
+          <div id="recommendSummary" class="recommend-summary">
+            <span class="recommend-chip">等待成绩</span>
+          </div>
+          <p id="recommendWeakness" class="status-line">先获取成绩并计算 Rating。</p>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h2>推荐歌曲</h2>
+            <span id="recommendCount" class="status-line"></span>
+          </div>
+          <div class="table-wrap">
+            <table class="recommend-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>曲名</th>
+                  <th>难度</th>
+                  <th>定数</th>
+                  <th>区间</th>
+                  <th>练习对象</th>
+                  <th>特征</th>
+                </tr>
+              </thead>
+              <tbody id="recommendTableBody">
+                <tr>
+                  <td colspan="7" class="empty-cell">等待成绩</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
       </section>
 
       <section id="dataPage" class="page-panel">
@@ -200,16 +265,45 @@
       <section class="modal-panel curve-modal-panel" role="dialog" aria-modal="true" aria-labelledby="curveModalTitle">
         <div class="modal-head">
           <div>
-            <span>新 Rating 规则</span>
-            <h2 id="curveModalTitle">分数补正曲线</h2>
+            <span>里 Rating 规则</span>
+            <h2 id="curveModalTitle">能打什么定数</h2>
           </div>
           <button id="curveModalClose" class="modal-close" type="button">关闭</button>
         </div>
         <div class="modal-body">
           <figure class="curve-figure">
-            <img src="taiko_rating_curve.png?v=20260706-preview-player-balloon" alt="太鼓新 Rating 分数补正曲线" />
-            <figcaption>里 Rating 单曲评价 = 谱面定数 + 分数补正；仅计入 clear_cnt > 0 的成绩，B30 固定除以 30。</figcaption>
+            <img src="taiko_rating_curve.png?v=20260706-alias-dedupe" alt="太鼓新 Rating 分数补正曲线" />
+            <figcaption>里 Rating 单曲评价 = 谱面定数 + 分数补正。</figcaption>
           </figure>
+          <div class="rule-copy">
+            <p>里 Rating 是为了描述“你大致能打什么定数的歌曲”而设计的：它只统计已经过关的成绩，并按分数曲线给单曲定数加上补正。</p>
+            <p>这个数值主要补足表 Rating 对入门和非顶尖玩家不够友好的问题。表 Rating 很依赖良率与旧公式映射，低分段容易出现“数值很好看但不直观对应能打的定数”的情况；里 Rating 则优先把过关能力放在中心。</p>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div id="classicRuleModal" class="modal-backdrop" hidden>
+      <section class="modal-panel curve-modal-panel" role="dialog" aria-modal="true" aria-labelledby="classicRuleModalTitle">
+        <div class="modal-head">
+          <div>
+            <span>表 Rating 规则</span>
+            <h2 id="classicRuleModalTitle">旧公式与六维</h2>
+          </div>
+          <button id="classicRuleModalClose" class="modal-close" type="button">关闭</button>
+        </div>
+        <div class="modal-body">
+          <div class="rule-copy">
+            <h3>表 Rating</h3>
+            <p>表 Rating 使用旧社区公式。单曲先把谱面定数映射成“定数得点 x”，再把玩家良率映射成“良率表现 y”，最后把 x 和 y 合成为单曲表 Rating；总分取单曲表 Rating 的 B20，并固定除以 20。</p>
+            <h3>关键数值</h3>
+            <p>定数得点是把谱面定数换算成旧公式内部难度分的结果。它不是原始定数，而是“这首谱面本身有多难”的非线性分值，越高定数增长越快。</p>
+            <p>复合数值表示谱面里需要手顺处理的复合配置强度，主要描述长复合、复杂复合、复合密集段带来的处理压力。</p>
+            <p>咚咔复杂度表示红蓝音符类型切换的复杂程度，越高说明咚/咔交替、音色切换和识别负担越重；它会参与节奏处理维度，而不是直接等同于复合处理。</p>
+            <h3>六维数据</h3>
+            <p>六维基于表 Rating 的单曲结果继续拆分：大歌力主要来自定数得点，精度力主要来自良率表现，体力来自平均密度，高速力来自瞬间密度，节奏处理来自咚咔复杂度和 BPM 变化，复合处理来自复合数值。</p>
+            <p>每个维度都会对可计入歌曲单独取 B20，再固定除以 20，所以六维不是同一批歌的拆解，而是各维度各自的最佳二十首。</p>
+          </div>
         </div>
       </section>
     </div>
@@ -234,7 +328,7 @@
       </section>
     </div>
 
-    <script src="rating_image.js?v=20260706-preview-player-balloon"></script>
-    <script src="app.js?v=20260706-preview-player-balloon"></script>
+    <script src="rating_image.js?v=20260706-alias-dedupe"></script>
+    <script src="app.js?v=20260706-alias-dedupe"></script>
   </body>
 </html>

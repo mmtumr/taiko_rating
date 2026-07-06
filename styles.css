@@ -278,6 +278,10 @@ table {
   min-width: 1260px;
 }
 
+.recommend-table {
+  min-width: 1020px;
+}
+
 th,
 td {
   text-align: left;
@@ -375,6 +379,66 @@ tbody tr.clickable-row.is-selected td {
   color: var(--blue);
   border-color: rgba(36, 111, 146, 0.28);
   background: rgba(36, 111, 146, 0.08);
+}
+
+.recommend-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.recommend-controls {
+  display: grid;
+  grid-template-columns: minmax(180px, 260px) repeat(2, max-content);
+  gap: 12px;
+  align-items: end;
+  margin-bottom: 12px;
+}
+
+.recommend-toggle {
+  min-height: 38px;
+  padding-bottom: 1px;
+}
+
+.recommend-toggle:has(input:disabled) {
+  opacity: 0.55;
+}
+
+.recommend-chip,
+.recommend-band {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 3px 10px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.recommend-chip strong {
+  color: var(--ink);
+  margin-right: 4px;
+}
+
+.recommend-band.same {
+  color: var(--blue);
+  border-color: rgba(36, 111, 146, 0.28);
+  background: rgba(36, 111, 146, 0.08);
+}
+
+.recommend-band.high {
+  color: #8a5a12;
+  border-color: rgba(138, 90, 18, 0.28);
+  background: rgba(138, 90, 18, 0.08);
+}
+
+.recommend-band.low {
+  color: var(--green);
+  border-color: rgba(35, 123, 98, 0.28);
+  background: rgba(35, 123, 98, 0.08);
 }
 
 .detail-panel {
@@ -677,6 +741,19 @@ body.modal-open {
   border-top: 1px solid var(--line);
 }
 
+.rule-copy {
+  display: grid;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.72;
+}
+
+.rule-copy h3 {
+  margin-top: 2px;
+  color: var(--ink);
+}
+
 .export-actions {
   justify-content: flex-start;
 }
@@ -714,6 +791,7 @@ body.modal-open {
 
   .form-grid,
   .data-controls,
+  .recommend-controls,
   .detail-grid,
   .filter-row {
     grid-template-columns: 1fr;
@@ -760,6 +838,10 @@ body.modal-open {
 
   .data-table {
     min-width: 1120px;
+  }
+
+  .recommend-table {
+    min-width: 920px;
   }
 
   .local-preview-svg {

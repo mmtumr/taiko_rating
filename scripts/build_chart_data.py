@@ -10,6 +10,11 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
+try:
+    import openpyxl
+except ImportError:  # pragma: no cover - optional helper for local rebuilds
+    openpyxl = None
+
 
 COURSE_LEVEL = {
     "easy": 1,
@@ -77,6 +82,68 @@ def normalize_title(title: str) -> str:
     value = re.sub(r"\(裏\)|（裏）|\bura\b|\bedit\b", "", value)
     value = re.sub(r"[^0-9a-z\u3040-\u30ff\u3400-\u9fff]+", "", value)
     return value
+
+
+def clean_alias_value(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, float) and value.is_integer():
+        text = str(int(value))
+    else:
+        text = str(value)
+    text = unicodedata.normalize("NFKC", text).strip()
+    text = re.sub(r"\s+", " ", text)
+    if text.startswith("&&"):
+        text = text[2:].strip()
+    if not text or re.fullmatch(r"id\d+", text, re.I):
+        return ""
+    return text
+
+
+def add_unique_alias(aliases: list[str], value: Any, primary: str = "") -> None:
+    alias = clean_alias_value(value)
+    if not alias or alias == primary:
+        return
+    normalized = normalize_title(alias)
+    if not normalized or normalized == normalize_title(primary):
+        return
+    if alias not in aliases:
+        aliases.append(alias)
+
+
+def build_song_alias_index(path: Path | None) -> dict[str, list[str]]:
+    if not path or not path.exists() or openpyxl is None:
+        return {}
+
+    workbook = openpyxl.load_workbook(path, read_only=True, data_only=True)
+    groups: list[list[str]] = []
+    for sheet in workbook.worksheets:
+        if sheet.title.lower().startswith("sheet"):
+            continue
+        for row in sheet.iter_rows(min_row=3, values_only=True):
+            title = clean_alias_value(row[1] if len(row) > 1 else "")
+            if not title:
+                continue
+            aliases: list[str] = []
+            for value in row[2:26]:
+                add_unique_alias(aliases, value, title)
+            if aliases:
+                groups.append([title, *aliases])
+
+    index: dict[str, list[str]] = {}
+    for group in groups:
+        merged: list[str] = []
+        for value in group:
+            add_unique_alias(merged, value)
+        for value in group:
+            key = normalize_title(value)
+            if not key:
+                continue
+            bucket = index.setdefault(key, [])
+            for alias in merged:
+                if normalize_title(alias) != key and alias not in bucket:
+                    bucket.append(alias)
+    return index
 
 
 def title_blob(row: dict[str, str]) -> str:
@@ -236,6 +303,7 @@ def make_record(
     fumen_stats_by_id: dict[str, Any],
     encoder_stats_by_id: dict[str, Any],
     bpm_by_path: dict[str, float | None],
+    alias_index: dict[str, list[str]],
 ) -> dict[str, Any]:
     course = clean_course(row.get("course", ""))
     course_level = COURSE_LEVEL.get(course.casefold())
@@ -272,6 +340,9 @@ def make_record(
         for value in [row.get("title"), row.get("title_ja"), row.get("title_zh")]
         if value and value != title
     ]
+    for name in [title, *aliases]:
+        for alias in alias_index.get(normalize_title(name), []):
+            add_unique_alias(aliases, alias, title)
     rating_excluded = course.casefold() == "normal"
     return {
         "id": record_id,
@@ -317,29 +388,43 @@ def variant_label(row: dict[str, Any]) -> str:
         path.stem,
         path.parent.name,
         str(row.get("ese", {}).get("category") or ""),
-        path_text,
     ]
     for candidate in candidates:
-        if candidate and normalize_title(candidate) != title_key:
+        if not candidate:
+            continue
+        if re.fullmatch(r"\d{2}\s+.+", str(candidate).strip()):
+            continue
+        if normalize_title(candidate) != title_key:
             return candidate
-    return path_text or str(row.get("course") or "")
+    return ""
 
 
 def numeric_signature(row: dict[str, Any]) -> str:
     features = row.get("features") if isinstance(row.get("features"), dict) else {}
+    def rounded(value: Any) -> Any:
+        number = as_float(value)
+        if number is None:
+            return value
+        return round(number, 6)
+
+    def roll_time_value() -> Any:
+        seconds = as_float(row.get("roll_time_seconds"))
+        if seconds is not None:
+            return round(seconds, 6)
+        match = re.search(r"-?\d+(?:\.\d+)?", str(row.get("roll_time") or ""))
+        return round(float(match.group(0)), 6) if match else row.get("roll_time")
+
     payload = {
         "course": row.get("course"),
-        "level": row.get("level"),
         "score_level": row.get("score_level"),
-        "const": row.get("const"),
-        "combo": row.get("combo"),
-        "bpm": row.get("bpm"),
+        "const": rounded(row.get("const")),
+        "combo": as_int(row.get("combo")),
         "features": {
-            key: features.get(key)
+            key: rounded(features.get(key))
             for key in ["complex", "avg_density", "peak_density", "note_type", "bpm_change", "hs_change", "rhythm"]
         },
-        "roll_time": row.get("roll_time_seconds") if row.get("roll_time_seconds") is not None else row.get("roll_time"),
-        "balloon_num": row.get("balloon_num"),
+        "roll_time": roll_time_value(),
+        "balloon_num": as_int(row.get("balloon_num")),
         "rating_excluded": row.get("rating_excluded"),
     }
     return json.dumps(payload, ensure_ascii=False, sort_keys=True)
@@ -436,7 +521,7 @@ def add_duplicate_metadata(records: list[dict[str, Any]]) -> None:
                 continue
             label = variant_label(row)
             row["variant_label"] = label
-            row["display_title"] = f"{row['title']} · {label}" if label else f"{row['title']} · #{index}"
+            row["display_title"] = f"{row['title']} · {label}" if label else row["title"]
 
 
 def build_chart_data(
@@ -445,6 +530,7 @@ def build_chart_data(
     fumen_stats_by_id: dict[str, Any],
     encoder_stats_by_id: dict[str, Any],
     bpm_by_path: dict[str, float | None],
+    alias_index: dict[str, list[str]],
 ) -> list[dict[str, Any]]:
     records: list[dict[str, Any]] = []
     seen: set[tuple[str, str]] = set()
@@ -460,7 +546,7 @@ def build_chart_data(
             continue
         seen.add(key)
         excel_row = excel_by_course.get(key)
-        records.append(make_record(row, excel_row, fumen_stats_by_id, encoder_stats_by_id, bpm_by_path))
+        records.append(make_record(row, excel_row, fumen_stats_by_id, encoder_stats_by_id, bpm_by_path, alias_index))
 
     records, dedupe_summary = drop_exact_numeric_duplicates(records)
     records.sort(key=lambda item: (item["course"] != "Edit", item["course"] != "Oni", item["course"] != "Hard", item["title"]))
@@ -508,6 +594,7 @@ def main() -> None:
     parser.add_argument("--strict-matched", type=Path, default=Path("../taiko_encoder_out/strict_matched_dataset.csv"))
     parser.add_argument("--fumen-stats", type=Path, default=Path("data/fumen_chart_stats.json"))
     parser.add_argument("--encoder-stats", type=Path, default=Path("data/encoder_chart_stats.json"))
+    parser.add_argument("--alias-workbook", type=Path, default=Path("太鼓之达人歌曲别名收集表.xlsx"))
     parser.add_argument("--output", type=Path, default=Path("data/chart_data.json"))
     parser.add_argument("--summary", type=Path, default=Path("data/chart_data_summary.json"))
     args = parser.parse_args()
@@ -520,10 +607,16 @@ def main() -> None:
     encoder_stats_by_id: dict[str, Any] = {}
     if args.encoder_stats.exists():
         encoder_stats_by_id = json.loads(args.encoder_stats.read_text(encoding="utf-8"))
+    alias_index = build_song_alias_index(args.alias_workbook)
     excel_by_course = build_excel_by_course(strict_rows)
     bpm_by_path = build_bpm_by_path(ese_rows)
-    records = build_chart_data(ese_rows, excel_by_course, fumen_stats_by_id, encoder_stats_by_id, bpm_by_path)
+    records = build_chart_data(ese_rows, excel_by_course, fumen_stats_by_id, encoder_stats_by_id, bpm_by_path, alias_index)
     summary = summarize(records)
+    summary["alias_workbook"] = {
+        "path": str(args.alias_workbook),
+        "keys": len(alias_index),
+        "loaded": bool(alias_index),
+    }
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8")

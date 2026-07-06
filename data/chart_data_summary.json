@@ -1,22 +1,22 @@
 {
-  "total": 5963,
+  "total": 5920,
   "by_course": {
-    "Edit": 374,
-    "Hard": 2824,
+    "Edit": 371,
+    "Hard": 2822,
     "Normal": 2,
-    "Oni": 2763
+    "Oni": 2725
   },
   "by_source": {
-    "encoder": 4480,
-    "excel": 991,
-    "fumen": 492
+    "encoder": 4477,
+    "excel": 986,
+    "fumen": 457
   },
   "needs_encoder": 0,
-  "duplicate_title_groups": 150,
-  "duplicate_chart_rows": 315,
+  "duplicate_title_groups": 115,
+  "duplicate_chart_rows": 242,
   "exact_numeric_dedupe": {
-    "duplicate_groups_removed": 123,
-    "duplicate_rows_removed": 131,
+    "duplicate_groups_removed": 154,
+    "duplicate_rows_removed": 174,
     "samples": [
       {
         "kept": "ANATATO TURATTATTA♪",
@@ -78,6 +78,7 @@
         "kept": "Harudion",
         "course": "Oni",
         "removed": [
+          "Harudion",
           "Harudion"
         ]
       },
@@ -89,6 +90,13 @@
         ]
       },
       {
+        "kept": "Highschool love!",
+        "course": "Oni",
+        "removed": [
+          "Highschool・love"
+        ]
+      },
+      {
         "kept": "怪物",
         "course": "Oni",
         "removed": [
@@ -103,9 +111,17 @@
         ]
       },
       {
+        "kept": "Natsumatsuri",
+        "course": "Oni",
+        "removed": [
+          "Natsumatsuri"
+        ]
+      },
+      {
         "kept": "樱桃",
         "course": "Oni",
         "removed": [
+          "樱桃",
           "樱桃"
         ]
       },
@@ -118,6 +134,20 @@
         ]
       },
       {
+        "kept": "上海ハニー",
+        "course": "Hard",
+        "removed": [
+          "上海ハニー"
+        ]
+      },
+      {
+        "kept": "Shine!!",
+        "course": "Oni",
+        "removed": [
+          "Shine"
+        ]
+      },
+      {
         "kept": "Show",
         "course": "Oni",
         "removed": [
@@ -129,34 +159,6 @@
         "course": "Hard",
         "removed": [
           "Show"
-        ]
-      },
-      {
-        "kept": "天体観測",
-        "course": "Hard",
-        "removed": [
-          "天体観測 -Old Audio-"
-        ]
-      },
-      {
-        "kept": "TT",
-        "course": "Oni",
-        "removed": [
-          "TT -Japanese ver.-"
-        ]
-      },
-      {
-        "kept": "TT",
-        "course": "Hard",
-        "removed": [
-          "TT -Japanese ver.-"
-        ]
-      },
-      {
-        "kept": "向夜晚奔去",
-        "course": "Hard",
-        "removed": [
-          "夜に駆ける -Cover Version-"
         ]
       }
     ]
@@ -178,5 +180,10 @@
       "source": "encoder",
       "path": "ESE-master\\ese\\09 Namco Original\\Yuugen no Ran\\Yuugen no Ran.tja"
     }
-  ]
+  ],
+  "alias_workbook": {
+    "path": "太鼓之达人歌曲别名收集表.xlsx",
+    "keys": 8578,
+    "loaded": true
+  }
 }

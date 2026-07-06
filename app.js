@@ -1,7 +1,8 @@
 const API_BASE = "https://kinoko.zorua.cn/api/v1";
-const DATA_VERSION = "20260706-preview-player-balloon";
+const DATA_VERSION = "20260706-alias-dedupe";
 const RATING_BEST_COUNT = 30;
 const CHART_PAGE_SIZE = 10;
+const RECOMMEND_COUNT = 20;
 
 const RADAR_DIMS = [
   { key: "power", label: "大歌力" },
@@ -54,6 +55,8 @@ const state = {
   ratingSummary: { classic: { rating: 0, dimensions: {} }, ura: { rating: 0 }, matchedCount: 0 },
   selectedRatingIndex: null,
   chartBrowserRows: [],
+  recommendationRows: [],
+  recommendationSeed: 0,
   selectedChartIndex: null,
   chartPage: 1,
   chartFilters: [],
@@ -73,6 +76,7 @@ const els = {
   fetchStatus: document.getElementById("fetchStatus"),
   constantsStatus: document.getElementById("constantsStatus"),
   curveButton: document.getElementById("curveButton"),
+  classicRuleButton: document.getElementById("classicRuleButton"),
   recalculateButton: document.getElementById("recalculateButton"),
   exportButton: document.getElementById("exportButton"),
   classicRatingValue: document.getElementById("classicRatingValue"),
@@ -81,6 +85,14 @@ const els = {
   matchedCount: document.getElementById("matchedCount"),
   ratingSvgWrap: document.getElementById("ratingSvgWrap"),
   ratingDetail: document.getElementById("ratingDetail"),
+  recommendRefreshButton: document.getElementById("recommendRefreshButton"),
+  recommendTargetSelect: document.getElementById("recommendTargetSelect"),
+  recommendEncoderInput: document.getElementById("recommendEncoderInput"),
+  recommendLowDifficultyInput: document.getElementById("recommendLowDifficultyInput"),
+  recommendSummary: document.getElementById("recommendSummary"),
+  recommendWeakness: document.getElementById("recommendWeakness"),
+  recommendCount: document.getElementById("recommendCount"),
+  recommendTableBody: document.getElementById("recommendTableBody"),
   pageTabs: document.querySelectorAll("[data-page-target]"),
   pages: document.querySelectorAll(".page-panel"),
   chartSearchInput: document.getElementById("chartSearchInput"),
@@ -100,6 +112,8 @@ const els = {
   chartModalClose: document.getElementById("chartModalClose"),
   curveModal: document.getElementById("curveModal"),
   curveModalClose: document.getElementById("curveModalClose"),
+  classicRuleModal: document.getElementById("classicRuleModal"),
+  classicRuleModalClose: document.getElementById("classicRuleModalClose"),
   exportModal: document.getElementById("exportModal"),
   exportModalClose: document.getElementById("exportModalClose"),
   exportDownloadLink: document.getElementById("exportDownloadLink"),
@@ -296,6 +310,14 @@ function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
+function cleanDisplayTitle(value) {
+  return String(value || "").replace(/\s+·\s+\d{2}\s+[^·]+$/u, "").trim();
+}
+
+function chartTitle(chart) {
+  return cleanDisplayTitle(chart?.display_title || chart?.title || "");
+}
+
 function getLocalPreview(chart) {
   return state.localPreviews.get(chart?.id) || null;
 }
@@ -372,6 +394,7 @@ async function loadChartData() {
   } catch (err) {
     els.constantsStatus.textContent = `谱面库未载入：${err instanceof Error ? err.message : "未知错误"}`;
     els.chartBrowserStatus.textContent = "谱面库未载入";
+    renderRecommendations();
   }
 }
 
@@ -507,7 +530,7 @@ function rateRecords(records) {
         ...record,
         chart,
         constant: chart.const,
-        constantTitle: chart.raw?.display_title || chart.title,
+        constantTitle: cleanDisplayTitle(chart.raw?.display_title || chart.title),
         chartSource: chart.source,
         needsEncoder: chart.needs_encoder,
         chartCombo: chart.combo,
@@ -553,6 +576,7 @@ function calculateRating() {
   };
   renderRatingTable();
   renderRatingDetail(state.selectedRatingIndex == null ? null : state.ratingObjects[state.selectedRatingIndex]);
+  renderRecommendations();
 }
 
 function radarSvg(dimensions, x, y, radius, color) {
@@ -616,8 +640,8 @@ function renderRatingTable(summary = state.ratingSummary) {
   const headerHeight = 106;
   const sectionY = 330;
   const sections = [
-    { mode: "里", title: "里 Rating B30", subtitle: "仅 clear_cnt > 0：定数 + 分数补正，固定除以30", x: margin, color: "#246f92", total: summary.ura?.rating, count: RATING_BEST_COUNT },
-    { mode: "表", title: "表 Rating B20", subtitle: "旧公式：定数得点 x 良率表现，固定除以20", x: margin + columnWidth + gap, color: "#a23b35", total: summary.classic?.rating, count: 20 },
+    { mode: "里", title: "里 Rating B30", x: margin, color: "#246f92", total: summary.ura?.rating, count: RATING_BEST_COUNT },
+    { mode: "表", title: "表 Rating B20", x: margin + columnWidth + gap, color: "#a23b35", total: summary.classic?.rating, count: 20 },
   ];
   const topCards = `
     <g>
@@ -631,15 +655,12 @@ function renderRatingTable(summary = state.ratingSummary) {
 
       <rect x="${margin + 370}" y="44" width="260" height="242" rx="8" fill="#ffffff" stroke="#d9dee5" />
       <text x="${margin + 394}" y="88" font-size="20" font-weight="800" fill="#20252b">匹配谱面</text>
-      <text x="${margin + 606}" y="158" font-size="58" font-weight="800" fill="#20252b" text-anchor="end">${escapeHtml(summary.matchedCount ?? 0)}</text>
-      <text x="${margin + 394}" y="218" font-size="15" fill="#66717d">B20/B30 不满按 0 补位</text>
-      <text x="${margin + 394}" y="246" font-size="15" fill="#66717d">里 Rating 仅计入 clear_cnt > 0</text>
+      <text x="${margin + 606}" y="176" font-size="62" font-weight="800" fill="#20252b" text-anchor="end">${escapeHtml(summary.matchedCount ?? 0)}</text>
     </g>
   `;
   const radarBlock = `
     <g>
-      <text x="1110" y="72" font-size="28" font-weight="800" fill="#20252b">六维 Rating</text>
-      <text x="1112" y="104" font-size="16" fill="#66717d">按旧公式各维度分别取 B20，固定除以20</text>
+      <text x="1110" y="82" font-size="28" font-weight="800" fill="#20252b">六维 Rating</text>
       ${radarSvg(summary.classic?.dimensions || {}, 1510, 170, 96, "#a23b35")}
     </g>
   `;
@@ -691,7 +712,6 @@ function renderRatingTable(summary = state.ratingSummary) {
           <g>
             <rect x="${section.x}" y="${y}" width="${columnWidth}" height="${height - y - 30}" rx="10" fill="#fbfcfd" stroke="#d9dee5" />
             <text x="${section.x + 22}" y="${y + 40}" font-size="28" font-weight="800" fill="${section.color}">${section.title}</text>
-            <text x="${section.x + 22}" y="${y + 70}" font-size="16" fill="#66717d">${section.subtitle}</text>
             <text x="${section.x + columnWidth - 22}" y="${y + 40}" font-size="30" font-weight="800" fill="${section.color}" text-anchor="end">${escapeHtml(formatRatingValue(section.total))}</text>
             <text x="${section.x + columnWidth - 22}" y="${y + 68}" font-size="14" fill="#66717d" text-anchor="end">总分 / B${section.count}</text>
             <text x="${section.x + columnWidth - 468}" y="${y + 95}" font-size="12" fill="#8b949e" text-anchor="end">总分</text>
@@ -817,7 +837,7 @@ async function fetchScores() {
 function getChartValue(chart, field) {
   const f = chart.features || {};
   const values = {
-    title: chart.display_title || chart.title,
+    title: chartTitle(chart),
     course: chart.course,
     level: chart.level,
     const: chart.const,
@@ -972,7 +992,7 @@ function renderChartBrowser() {
       const f = chart.features || {};
       return `
         <tr class="clickable-row ${state.selectedChartIndex === globalIndex ? "is-selected" : ""}" data-chart-index="${globalIndex}">
-          <td>${escapeHtml(chart.display_title || chart.title)}</td>
+          <td>${escapeHtml(chartTitle(chart))}</td>
           <td>${escapeHtml(chart.course_label || chart.course)}</td>
           <td class="numeric">${formatLoose(chart.level, 0)}</td>
           <td class="numeric">${formatLoose(chart.const, 1)}</td>
@@ -985,6 +1005,288 @@ function renderChartBrowser() {
           <td class="numeric">${formatLoose(f.bpm_change)}</td>
           <td class="numeric">${formatLoose(f.hs_change)}</td>
           <td><span class="source-badge ${sourceClass(chart.source)}">${sourceLabel(chart.source, chart.needs_encoder)}</span></td>
+        </tr>
+      `;
+    })
+    .join("");
+}
+
+function chartFeatureNumber(chart, key) {
+  const f = chart?.features || {};
+  const value = key === "const" ? chart?.const : f[key];
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
+}
+
+function chartTrainingProfile(chart) {
+  const complex = chartFeatureNumber(chart, "complex");
+  const avgDensity = chartFeatureNumber(chart, "avg_density");
+  const peakDensity = chartFeatureNumber(chart, "peak_density");
+  const noteType = chartFeatureNumber(chart, "note_type");
+  const bpmChange = chartFeatureNumber(chart, "bpm_change");
+  const hsChange = chartFeatureNumber(chart, "hs_change");
+  const rhythm = chartFeatureNumber(chart, "rhythm") || noteType;
+  const stability = 100 - (complex * 0.28 + rhythm * 0.24 + bpmChange * 0.22 + hsChange * 0.18 + peakDensity * 0.08);
+  return {
+    power: clamp((Number(chart.const) - 4) / 8, 0, 1),
+    stamina: clamp(avgDensity / 100, 0, 1),
+    speed: clamp(peakDensity / 100, 0, 1),
+    accuracy: clamp(stability / 100, 0, 1),
+    rhythm: clamp((rhythm + bpmChange * 0.35 + hsChange * 0.2) / 130, 0, 1),
+    complex: clamp(complex / 100, 0, 1),
+  };
+}
+
+function getRecommendUseEncoder() {
+  return Boolean(els.recommendEncoderInput?.checked);
+}
+
+function getRecommendAllowLowDifficulty() {
+  return Boolean(els.recommendLowDifficultyInput?.checked && getRecommendUseEncoder());
+}
+
+function syncRecommendControls() {
+  if (!els.recommendLowDifficultyInput) return;
+  const canUseLowDifficulty = getRecommendUseEncoder();
+  els.recommendLowDifficultyInput.disabled = !canUseLowDifficulty;
+  if (!canUseLowDifficulty) {
+    els.recommendLowDifficultyInput.checked = false;
+  }
+}
+
+function chartUsableForRecommendation(chart) {
+  const scoreLevel = Number(chart.score_level);
+  if (!Number.isFinite(scoreLevel) || scoreLevel < 1) return false;
+  if (!getRecommendUseEncoder() && isEstimatedSource(chart)) return false;
+  if (!getRecommendAllowLowDifficulty() && scoreLevel < 4) return false;
+  return !chart.rating_excluded && hasNumericValue(chart.const);
+}
+
+function getWeakDimensions(dimensions) {
+  const entries = RADAR_DIMS.map((dim) => ({
+    ...dim,
+    value: Number(dimensions?.[dim.key]),
+  })).filter((dim) => Number.isFinite(dim.value) && dim.value > 0);
+  if (!entries.length) return [];
+  entries.sort((a, b) => a.value - b.value);
+  return entries.slice(0, Math.min(2, entries.length));
+}
+
+function getSelectedPracticeDims(weakDims) {
+  const selected = els.recommendTargetSelect?.value || "auto";
+  if (selected === "auto") return weakDims;
+  const dim = RADAR_DIMS.find((item) => item.key === selected);
+  return dim ? [dim] : weakDims;
+}
+
+function isAutoPracticeSelection() {
+  return (els.recommendTargetSelect?.value || "auto") === "auto";
+}
+
+function formatPracticeTarget(dims, isAuto) {
+  const names = dims.length ? dims.map((dim) => dim.label).join(" / ") : "综合";
+  return isAuto ? `自动：${names}` : names;
+}
+
+function practiceDescription(dims) {
+  const keys = new Set(dims.map((dim) => dim.key));
+  const names = dims.map((dim) => dim.label).join(" / ");
+  if (dims.length > 1 && keys.has("power") && keys.has("accuracy")) return "会优先挑选同时适合两项练习对象的谱面；大歌力偏向略高定数，精度力偏向略低定数。";
+  if (dims.length > 1 && keys.has("power")) return `会优先挑选同时适合 ${names} 的谱面；大歌力偏向略高定数，其余对象按谱面特征筛选。`;
+  if (dims.length > 1 && keys.has("accuracy")) return `会优先挑选同时适合 ${names} 的谱面；精度力偏向略低定数，其余对象按谱面特征筛选。`;
+  if (dims.length > 1) return `会优先挑选在 ${names} 上都比较合适的谱面。`;
+  if (keys.has("power")) return "大歌力偏向推荐略高定数的歌曲。";
+  if (keys.has("accuracy")) return "精度力偏向推荐略低定数的歌曲。";
+  if (dims.length) return `优先挑选接近当前里 Rating、并能练到 ${names} 的谱面。`;
+  return "六维数据不足时，优先按定数接近当前里 Rating 推荐。";
+}
+
+function desiredDeltaForPractice(dims) {
+  const offsets = dims.flatMap((dim) => {
+    if (dim.key === "power") return [0.55];
+    if (dim.key === "accuracy") return [-0.55];
+    return [0.08];
+  });
+  if (!offsets.length) return 0;
+  return offsets.reduce((sum, value) => sum + value, 0) / offsets.length;
+}
+
+function practiceQuotas(dims, balanced = false) {
+  const keys = new Set(dims.map((dim) => dim.key));
+  if (balanced && keys.has("power") && keys.has("accuracy")) return { 略高: 7, 略低: 7, 同水平: 6 };
+  if (balanced && keys.has("power")) return { 略高: 8, 同水平: 8, 略低: 4 };
+  if (balanced && keys.has("accuracy")) return { 略低: 8, 同水平: 8, 略高: 4 };
+  if (keys.has("power") && keys.has("accuracy")) return { 略高: 8, 略低: 8, 同水平: 4 };
+  if (keys.has("power")) return { 略高: 12, 同水平: 5, 略低: 3 };
+  if (keys.has("accuracy")) return { 略低: 12, 同水平: 5, 略高: 3 };
+  return { 同水平: 8, 略高: 7, 略低: 5 };
+}
+
+function practiceMatchScore(dim, band, profile) {
+  if (dim.key === "power") {
+    if (band === "略高") return 1;
+    if (band === "同水平") return 0.42;
+    return 0.06;
+  }
+  if (dim.key === "accuracy") {
+    const bandScore = band === "略低" ? 1 : band === "同水平" ? 0.44 : 0.08;
+    return bandScore * 0.7 + (profile.accuracy || 0) * 0.3;
+  }
+  return profile[dim.key] || 0;
+}
+
+function aggregatePracticeScores(scores, balanced = false) {
+  const values = scores.filter((score) => Number.isFinite(score));
+  if (!values.length) return 0.5;
+  const average = values.reduce((sum, value) => sum + value, 0) / values.length;
+  if (!balanced || values.length < 2) return average;
+  const weakest = Math.min(...values);
+  return weakest * 0.72 + average * 0.28;
+}
+
+function recommendationBand(delta) {
+  if (delta > 0.25) return "略高";
+  if (delta < -0.25) return "略低";
+  return "同水平";
+}
+
+function recommendationBandClass(band) {
+  if (band === "略高") return "high";
+  if (band === "略低") return "low";
+  return "same";
+}
+
+function recommendationFeatureText(chart) {
+  const f = chart.features || {};
+  return `密度 ${formatLoose(f.avg_density)}/${formatLoose(f.peak_density)} · 节奏 ${formatLoose(f.rhythm)} · 复合 ${formatLoose(f.complex)}`;
+}
+
+function recommendationKey(chart) {
+  return `${normalizeTitle(chart.title)}:${chart.course}:${formatLoose(chart.const, 1)}`;
+}
+
+function hashText(value) {
+  let hash = 2166136261;
+  const text = String(value);
+  for (let i = 0; i < text.length; i += 1) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function recommendationJitter(chart) {
+  return hashText(`${state.recommendationSeed}:${chart.id || chart.title}`) / 0xffffffff;
+}
+
+function buildRecommendations() {
+  const rating = Number(state.ratingSummary?.ura?.rating);
+  if (!Number.isFinite(rating) || rating <= 0) return { rating, weakDims: [], practiceDims: [], rows: [] };
+  const weakDims = getWeakDimensions(state.ratingSummary?.classic?.dimensions || {});
+  const practiceDims = getSelectedPracticeDims(weakDims);
+  const balancedPractice = isAutoPracticeSelection() && practiceDims.length > 1;
+  const desiredDelta = desiredDeltaForPractice(practiceDims);
+  const b30Ids = new Set(state.ratingBest.map((row) => row.chart?.raw?.id).filter(Boolean));
+  const scoredCharts = [];
+
+  for (const chart of state.chartData) {
+    if (!chartUsableForRecommendation(chart)) continue;
+    if (b30Ids.has(chart.id)) continue;
+    const constant = Number(chart.const);
+    if (!Number.isFinite(constant)) continue;
+    const delta = constant - rating;
+    if (Math.abs(delta) > 1.2) continue;
+    const band = recommendationBand(delta);
+    const profile = chartTrainingProfile(chart);
+    const practiceScores = practiceDims.map((dim) => practiceMatchScore(dim, band, profile));
+    const practiceScore = aggregatePracticeScores(practiceScores, balancedPractice);
+    const focusDims = practiceDims.slice(0, 2);
+    const distanceScore = 1 - Math.min(Math.abs(delta - desiredDelta) / 1.35, 1);
+    const neutralDistance = 1 - Math.min(Math.abs(delta) / 1.2, 1);
+    const jitter = recommendationJitter(chart);
+    const score = distanceScore * 1.35 + neutralDistance * 0.45 + practiceScore * 1.25 + sourcePriority(chart.source) * 0.025 + jitter * 0.72;
+    scoredCharts.push({
+      chart,
+      band,
+      focusDims: focusDims.length ? focusDims : practiceDims.slice(0, 1),
+      featureText: recommendationFeatureText(chart),
+      score,
+      delta,
+    });
+  }
+
+  scoredCharts.sort((a, b) => b.score - a.score || Math.abs(a.delta) - Math.abs(b.delta));
+
+  const quotas = practiceQuotas(practiceDims, balancedPractice);
+  const selected = [];
+  const seen = new Set();
+  const take = (filter, limit = RECOMMEND_COUNT) => {
+    for (const row of scoredCharts) {
+      if (selected.length >= limit) return;
+      if (!filter(row)) continue;
+      const key = recommendationKey(row.chart);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      selected.push(row);
+    }
+  };
+
+  for (const [band, quota] of Object.entries(quotas)) {
+    const before = selected.length;
+    take((row) => row.band === band, before + quota);
+  }
+  take(() => true);
+
+  return { rating, weakDims, practiceDims, rows: selected.slice(0, RECOMMEND_COUNT) };
+}
+
+function renderRecommendations() {
+  if (!els.recommendTableBody) return;
+  syncRecommendControls();
+  const { rating, practiceDims, rows } = buildRecommendations();
+  state.recommendationRows = rows;
+
+  if (!Number.isFinite(rating) || rating <= 0) {
+    els.recommendSummary.innerHTML = '<span class="recommend-chip">暂无里 Rating</span>';
+    els.recommendWeakness.textContent = "先获取成绩并刷新 Rating 后，再生成进步推荐。";
+    els.recommendCount.textContent = "";
+    els.recommendTableBody.innerHTML = '<tr><td colspan="7" class="empty-cell">暂无可推荐歌曲</td></tr>';
+    return;
+  }
+
+  const lower = Math.max(0, rating - 1.2);
+  const upper = rating + 1.2;
+  const targetText = formatPracticeTarget(practiceDims, (els.recommendTargetSelect?.value || "auto") === "auto");
+  const sourceText = getRecommendUseEncoder() ? "含神经网络" : "不含神经网络";
+  const difficultyText = getRecommendAllowLowDifficulty() ? "含松以下" : "仅鬼/里";
+  els.recommendSummary.innerHTML = `
+    <span class="recommend-chip"><strong>${escapeHtml(formatRatingValue(rating))}</strong> 里 Rating</span>
+    <span class="recommend-chip">${escapeHtml(formatNumber(lower, 1))} - ${escapeHtml(formatNumber(upper, 1))} 推荐定数</span>
+    <span class="recommend-chip">练习对象 ${escapeHtml(targetText)}</span>
+    <span class="recommend-chip">${escapeHtml(sourceText)}</span>
+    <span class="recommend-chip">${escapeHtml(difficultyText)}</span>
+  `;
+  els.recommendWeakness.textContent = practiceDescription(practiceDims);
+  els.recommendCount.textContent = `推荐 ${rows.length}/${RECOMMEND_COUNT} 首`;
+
+  if (!rows.length) {
+    els.recommendTableBody.innerHTML = '<tr><td colspan="7" class="empty-cell">当前数据范围内没有合适谱面</td></tr>';
+    return;
+  }
+
+  els.recommendTableBody.innerHTML = rows
+    .map((row, index) => {
+      const chart = row.chart;
+      const focusText = row.focusDims.length ? row.focusDims.map((dim) => dim.label).join(" / ") : "综合";
+      return `
+        <tr class="clickable-row" data-recommend-index="${index}">
+          <td class="numeric">${index + 1}</td>
+          <td>${escapeHtml(chartTitle(chart))}</td>
+          <td>${escapeHtml(chart.course_label || chart.course)}</td>
+          <td class="numeric">${formatLoose(chart.const, 1)}</td>
+          <td><span class="recommend-band ${recommendationBandClass(row.band)}">${escapeHtml(row.band)}</span></td>
+          <td>${escapeHtml(focusText)}</td>
+          <td>${escapeHtml(row.featureText)} · ${escapeHtml(sourceLabel(chart.source, chart.needs_encoder))}</td>
         </tr>
       `;
     })
@@ -1291,7 +1593,7 @@ function drawChartPreviewFrame(player) {
 
   ctx.fillStyle = "#20252b";
   ctx.font = "700 18px 'Microsoft YaHei', 'Segoe UI', Arial, sans-serif";
-  ctx.fillText(truncateText(chart.display_title || chart.title || "Taiko chart", width < 640 ? 24 : 42), 28, 42);
+  ctx.fillText(truncateText(chartTitle(chart) || "Taiko chart", width < 640 ? 24 : 42), 28, 42);
   ctx.fillStyle = "#66717d";
   ctx.font = "13px 'Microsoft YaHei', 'Segoe UI', Arial, sans-serif";
   ctx.fillText(
@@ -1528,7 +1830,7 @@ function renderChartPreviewPlayer(preview, chart) {
   return `
     <figure class="preview-figure chart-player-figure">
       <div class="chart-player" data-chart-player>
-        <canvas class="chart-player-canvas" data-chart-canvas aria-label="${escapeHtml(chart.display_title || chart.title)} 动态谱面预览"></canvas>
+        <canvas class="chart-player-canvas" data-chart-canvas aria-label="${escapeHtml(chartTitle(chart))} 动态谱面预览"></canvas>
         <div class="chart-player-controls">
           <button type="button" data-chart-play>播放</button>
           <input data-chart-progress type="range" min="0" max="1000" value="0" aria-label="播放进度" />
@@ -1583,7 +1885,7 @@ function renderLocalPreviewSvg(preview, chart) {
   const top = 86;
   const rows = Math.ceil(measures.length / cols);
   const height = top + rows * (measureHeight + rowGap) + 52;
-  const title = chart.display_title || chart.title || "Taiko chart";
+  const title = chartTitle(chart) || "Taiko chart";
   const subtitle = `${chart.course_label || chart.course || ""}  ★${formatLoose(chart.level, 0)}  ${preview.shown_measure_count || measures.length}/${preview.measure_count || measures.length} 小节`;
 
   const measureSvgs = measures
@@ -1643,7 +1945,7 @@ function renderPreviewImages(chart) {
             <figure class="preview-figure">
               <img
                 src="${escapeHtml(image.url)}"
-                alt="${escapeHtml(`${chart.display_title || chart.title} ${caption}`)}"
+                alt="${escapeHtml(`${chartTitle(chart)} ${caption}`)}"
                 loading="lazy"
                 referrerpolicy="no-referrer"
                 crossorigin="anonymous"
@@ -1665,7 +1967,7 @@ function renderChartModalBody(chart) {
   const localPreview = getLocalPreview(chart);
   const timing = localPreview?.timing_summary || {};
   const items = [
-    ["曲名", chart.display_title || chart.title],
+    ["曲名", chartTitle(chart)],
     ["原曲名", chart.title],
     ["难度", chart.course_label || chart.course],
     ["星级", formatLoose(chart.level, 0)],
@@ -1707,13 +2009,13 @@ function renderChartModalBody(chart) {
 }
 
 function syncModalOpenClass() {
-  const hasOpenModal = [els.chartModal, els.curveModal, els.exportModal].some((modal) => modal && !modal.hidden);
+  const hasOpenModal = [els.chartModal, els.curveModal, els.classicRuleModal, els.exportModal].some((modal) => modal && !modal.hidden);
   document.body.classList.toggle("modal-open", hasOpenModal);
 }
 
 function openChartModal(chart) {
   if (!chart || !els.chartModal) return;
-  els.chartModalTitle.textContent = `${chart.display_title || chart.title} / ${chart.course_label || chart.course}`;
+  els.chartModalTitle.textContent = `${chartTitle(chart)} / ${chart.course_label || chart.course}`;
   els.chartModalBody.innerHTML = renderChartModalBody(chart);
   els.chartModal.hidden = false;
   syncModalOpenClass();
@@ -1739,6 +2041,19 @@ function openCurveModal() {
 function closeCurveModal() {
   if (!els.curveModal || els.curveModal.hidden) return;
   els.curveModal.hidden = true;
+  syncModalOpenClass();
+}
+
+function openClassicRuleModal() {
+  if (!els.classicRuleModal) return;
+  els.classicRuleModal.hidden = false;
+  syncModalOpenClass();
+  els.classicRuleModalClose?.focus();
+}
+
+function closeClassicRuleModal() {
+  if (!els.classicRuleModal || els.classicRuleModal.hidden) return;
+  els.classicRuleModal.hidden = true;
   syncModalOpenClass();
 }
 
@@ -1814,11 +2129,25 @@ function switchPage(pageId) {
   if (location.hash !== `#${pageId}`) {
     history.replaceState(null, "", `#${pageId}`);
   }
+  if (pageId === "recommendPage") {
+    renderRecommendations();
+  }
 }
 
 function refreshRating() {
   calculateRating();
   els.fetchStatus.textContent = state.records.length ? `已刷新 ${state.records.length} 条记录` : "暂无成绩，先获取成绩";
+}
+
+function rerollRecommendations() {
+  state.recommendationSeed += 1;
+  renderRecommendations();
+}
+
+function updateRecommendationOption() {
+  state.recommendationSeed += 1;
+  syncRecommendControls();
+  renderRecommendations();
 }
 
 function canvasToBlob(canvas) {
@@ -1913,8 +2242,13 @@ async function exportPng() {
 
 els.fetchButton.addEventListener("click", fetchScores);
 els.curveButton?.addEventListener("click", openCurveModal);
+els.classicRuleButton?.addEventListener("click", openClassicRuleModal);
 els.recalculateButton.addEventListener("click", refreshRating);
 els.exportButton.addEventListener("click", exportPng);
+els.recommendRefreshButton?.addEventListener("click", rerollRecommendations);
+els.recommendTargetSelect?.addEventListener("change", updateRecommendationOption);
+els.recommendEncoderInput?.addEventListener("change", updateRecommendationOption);
+els.recommendLowDifficultyInput?.addEventListener("change", updateRecommendationOption);
 
 els.useEncoderInput.addEventListener("change", () => {
   indexChartData(state.chartData);
@@ -1952,6 +2286,13 @@ els.chartTableBody.addEventListener("click", (event) => {
   openChartModal(state.chartBrowserRows[state.selectedChartIndex]);
 });
 
+els.recommendTableBody?.addEventListener("click", (event) => {
+  const row = event.target.closest("[data-recommend-index]");
+  if (!row) return;
+  const item = state.recommendationRows[Number(row.dataset.recommendIndex)];
+  if (item?.chart) openChartModal(item.chart);
+});
+
 els.chartPagination?.addEventListener("click", (event) => {
   const button = event.target.closest("[data-chart-page]");
   if (!button || button.disabled) return;
@@ -1966,6 +2307,7 @@ els.chartPagination?.addEventListener("click", (event) => {
 
 els.chartModalClose?.addEventListener("click", closeChartModal);
 els.curveModalClose?.addEventListener("click", closeCurveModal);
+els.classicRuleModalClose?.addEventListener("click", closeClassicRuleModal);
 els.exportModalClose?.addEventListener("click", closeExportModal);
 
 els.chartModal?.addEventListener("click", (event) => {
@@ -1977,6 +2319,12 @@ els.chartModal?.addEventListener("click", (event) => {
 els.curveModal?.addEventListener("click", (event) => {
   if (event.target === els.curveModal) {
     closeCurveModal();
+  }
+});
+
+els.classicRuleModal?.addEventListener("click", (event) => {
+  if (event.target === els.classicRuleModal) {
+    closeClassicRuleModal();
   }
 });
 
@@ -1994,6 +2342,7 @@ els.exportOpenButton?.addEventListener("click", () => {
 window.addEventListener("keydown", (event) => {
   if (event.key === "Escape") {
     if (els.exportModal && !els.exportModal.hidden) closeExportModal();
+    else if (els.classicRuleModal && !els.classicRuleModal.hidden) closeClassicRuleModal();
     else if (els.curveModal && !els.curveModal.hidden) closeCurveModal();
     else closeChartModal();
   }
@@ -2050,7 +2399,11 @@ els.filterRows.addEventListener("click", (event) => {
 });
 
 populateControls();
-if (location.hash.slice(1) === "dataPage") {
-  switchPage("dataPage");
+syncRecommendControls();
+{
+  const initialPage = location.hash.slice(1);
+  if (initialPage && document.getElementById(initialPage)?.classList.contains("page-panel")) {
+    switchPage(initialPage);
+  }
 }
 loadChartData();
