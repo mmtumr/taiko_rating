@@ -1,5 +1,5 @@
 const API_BASE = "https://kinoko.zorua.cn/api/v1";
-const DATA_VERSION = "20260706-feedback-worker";
+const DATA_VERSION = "20260706-feedback-inline";
 const FEEDBACK_API_BASE = window.TAIKO_FEEDBACK_API_BASE || "";
 const RATING_BEST_COUNT = 30;
 const CHART_PAGE_SIZE = 10;
@@ -351,45 +351,25 @@ function feedbackVoteLabel(vote) {
   return "";
 }
 
-function renderFeedbackSection(chart) {
-  if (!isEstimatedSource(chart)) {
-    return "";
-  }
+function feedbackControlHtml(chart, fieldKey) {
   const configured = Boolean(FEEDBACK_API_BASE);
   return `
-    <section class="modal-section feedback-section" data-feedback-chart-id="${escapeHtml(chart.id)}">
-      <div class="feedback-head">
-        <h3>神经网络数据反馈</h3>
-        <span data-feedback-status>${configured ? "读取反馈中" : "反馈服务尚未配置"}</span>
+    <div class="feedback-inline">
+      <div class="feedback-buttons">
+        <button type="button" data-feedback-vote="too_high" ${configured ? "" : "disabled"}>偏高</button>
+        <button type="button" data-feedback-vote="too_low" ${configured ? "" : "disabled"}>偏低</button>
       </div>
-      <div class="feedback-grid">
-        ${FEEDBACK_FIELDS.map((field) => {
-          const value = getPathValue(chart, field.path);
-          return `
-            <div class="feedback-row" data-feedback-field="${field.key}">
-              <div>
-                <strong>${escapeHtml(field.label)}</strong>
-                <span>当前值 ${escapeHtml(formatLoose(value))}</span>
-              </div>
-              <div class="feedback-buttons">
-                <button type="button" data-feedback-vote="too_high" ${configured ? "" : "disabled"}>偏高</button>
-                <button type="button" data-feedback-vote="too_low" ${configured ? "" : "disabled"}>偏低</button>
-              </div>
-              <span class="feedback-counts" data-feedback-counts>暂无反馈</span>
-            </div>
-          `;
-        }).join("")}
-      </div>
-    </section>
+      <span class="feedback-counts" data-feedback-counts>${configured ? "读取中" : "反馈服务未配置"}</span>
+    </div>
   `;
 }
 
 function applyFeedbackSummary(chart, payload) {
-  const section = els.chartModalBody.querySelector(`[data-feedback-chart-id="${CSS.escape(chart.id)}"]`);
-  if (!section) return;
+  const root = els.chartModalBody.querySelector(`[data-feedback-root-id="${CSS.escape(chart.id)}"]`);
+  if (!root) return;
   const summary = payload?.summary || {};
   const mine = payload?.mine || {};
-  for (const row of section.querySelectorAll("[data-feedback-field]")) {
+  for (const row of root.querySelectorAll("[data-feedback-field]")) {
     const field = row.dataset.feedbackField;
     const counts = summary[field] || {};
     const high = Number(counts.too_high || 0);
@@ -399,16 +379,17 @@ function applyFeedbackSummary(chart, payload) {
     for (const button of row.querySelectorAll("[data-feedback-vote]")) {
       const voted = mine[field] === button.dataset.feedbackVote;
       button.classList.toggle("is-selected", voted);
-      button.textContent = voted ? `已投${feedbackVoteLabel(button.dataset.feedbackVote)}` : feedbackVoteLabel(button.dataset.feedbackVote);
+      button.textContent = voted ? `取消${feedbackVoteLabel(button.dataset.feedbackVote)}` : feedbackVoteLabel(button.dataset.feedbackVote);
+      button.title = voted ? "再次点击取消投票" : "";
     }
   }
-  const status = section.querySelector("[data-feedback-status]");
+  const status = root.querySelector("[data-feedback-status]");
   if (status) status.textContent = "反馈已同步";
 }
 
 async function loadFeedbackSummary(chart) {
   if (!FEEDBACK_API_BASE || !isEstimatedSource(chart)) return;
-  const section = els.chartModalBody.querySelector(`[data-feedback-chart-id="${CSS.escape(chart.id)}"]`);
+  const root = els.chartModalBody.querySelector(`[data-feedback-root-id="${CSS.escape(chart.id)}"]`);
   try {
     const url = new URL(`${FEEDBACK_API_BASE.replace(/\/$/, "")}/summary`);
     url.searchParams.set("chart_id", chart.id);
@@ -419,31 +400,37 @@ async function loadFeedbackSummary(chart) {
     state.feedbackSummaries.set(feedbackSummaryKey(chart), payload);
     applyFeedbackSummary(chart, payload);
   } catch (err) {
-    const status = section?.querySelector("[data-feedback-status]");
+    const status = root?.querySelector("[data-feedback-status]");
     if (status) status.textContent = err instanceof Error ? `反馈读取失败：${err.message}` : "反馈读取失败";
   }
 }
 
 async function submitFeedbackVote(chart, field, vote) {
-  if (!FEEDBACK_API_BASE || !chart || !field || !vote) return;
-  const section = els.chartModalBody.querySelector(`[data-feedback-chart-id="${CSS.escape(chart.id)}"]`);
-  const status = section?.querySelector("[data-feedback-status]");
+  if (!FEEDBACK_API_BASE || !chart || !field) return;
+  const root = els.chartModalBody.querySelector(`[data-feedback-root-id="${CSS.escape(chart.id)}"]`);
+  const status = root?.querySelector("[data-feedback-status]");
   if (status) status.textContent = "提交中";
   const fieldDef = FEEDBACK_FIELDS.find((item) => item.key === field);
+  const clientId = getFeedbackClientId();
+  const body = {
+    chart_id: chart.id,
+    field,
+    client_id: clientId,
+  };
+  if (vote) {
+    Object.assign(body, {
+      title: chartTitle(chart),
+      course: chart.course_label || chart.course,
+      source: sourceLabel(chart.source, chart.needs_encoder),
+      vote,
+      current_value: fieldDef ? Number(getPathValue(chart, fieldDef.path)) : null,
+    });
+  }
   try {
     const resp = await fetch(`${FEEDBACK_API_BASE.replace(/\/$/, "")}/vote`, {
-      method: "POST",
+      method: vote ? "POST" : "DELETE",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chart_id: chart.id,
-        title: chartTitle(chart),
-        course: chart.course_label || chart.course,
-        source: sourceLabel(chart.source, chart.needs_encoder),
-        field,
-        vote,
-        current_value: fieldDef ? Number(getPathValue(chart, fieldDef.path)) : null,
-        client_id: getFeedbackClientId(),
-      }),
+      body: JSON.stringify(body),
     });
     const payload = await resp.json().catch(() => ({}));
     if (!resp.ok) throw new Error(payload.error || `HTTP ${resp.status}`);
@@ -2114,46 +2101,58 @@ function renderChartModalBody(chart) {
   const f = chart.features || {};
   const localPreview = getLocalPreview(chart);
   const timing = localPreview?.timing_summary || {};
+  const feedbackEnabled = isEstimatedSource(chart);
   const items = [
-    ["曲名", chartTitle(chart)],
-    ["原曲名", chart.title],
-    ["难度", chart.course_label || chart.course],
-    ["星级", formatLoose(chart.level, 0)],
-    ["定数", formatLoose(chart.const, 1)],
-    ["BPM", formatLoose(chart.bpm)],
-    ["combo", formatLoose(chart.combo, 0)],
-    ["来源", sourceLabel(chart.source, chart.needs_encoder)],
-    ["复合处理", formatLoose(f.complex)],
-    ["平均密度", formatLoose(f.avg_density)],
-    ["瞬间密度", formatLoose(f.peak_density)],
-    ["咚咔复杂度", formatLoose(f.note_type)],
-    ["BPM变化", formatLoose(f.bpm_change)],
-    ["HS变化", formatLoose(f.hs_change)],
-    ["节奏处理", formatLoose(f.rhythm)],
-    ["连打时长", formatLoose(chart.roll_time)],
-    ["气球数", formatLoose(chart.balloon_num, 0)],
-    ["Rating计入", chart.rating_excluded ? "不计入" : "计入"],
-    ["排除原因", chart.rating_exclusion_reason || "--"],
-    ["重名组", chart.duplicate_group_size > 1 ? `${chart.duplicate_index}/${chart.duplicate_group_size}` : "--"],
-    ["预览来源", localPreview ? "本地 TJA 动态预览" : "--"],
-    ["预览小节", localPreview ? `${localPreview.shown_measure_count}/${localPreview.measure_count}` : "--"],
-    ["预览HS事件", localPreview ? formatLoose(timing.scroll_change_count, 0) : "--"],
-    ["预览BPM事件", localPreview ? formatLoose(timing.bpm_change_count, 0) : "--"],
-    ["预览延迟", localPreview ? `${formatLoose(timing.total_delay)}秒` : "--"],
-    ["网站", chart.fumen?.url || "--"],
+    { label: "曲名", value: chartTitle(chart) },
+    { label: "原曲名", value: chart.title },
+    { label: "难度", value: chart.course_label || chart.course },
+    { label: "星级", value: formatLoose(chart.level, 0) },
+    { label: "定数", value: formatLoose(chart.const, 1), feedback: "const" },
+    { label: "BPM", value: formatLoose(chart.bpm) },
+    { label: "combo", value: formatLoose(chart.combo, 0) },
+    { label: "来源", value: sourceLabel(chart.source, chart.needs_encoder) },
+    { label: "复合处理", value: formatLoose(f.complex), feedback: "complex" },
+    { label: "平均密度", value: formatLoose(f.avg_density), feedback: "avg_density" },
+    { label: "瞬间密度", value: formatLoose(f.peak_density), feedback: "peak_density" },
+    { label: "咚咔复杂度", value: formatLoose(f.note_type), feedback: "note_type" },
+    { label: "BPM变化", value: formatLoose(f.bpm_change), feedback: "bpm_change" },
+    { label: "HS变化", value: formatLoose(f.hs_change), feedback: "hs_change" },
+    { label: "节奏处理", value: formatLoose(f.rhythm), feedback: "rhythm" },
+    { label: "连打时长", value: formatLoose(chart.roll_time) },
+    { label: "气球数", value: formatLoose(chart.balloon_num, 0) },
+    { label: "Rating计入", value: chart.rating_excluded ? "不计入" : "计入" },
+    { label: "排除原因", value: chart.rating_exclusion_reason || "--" },
+    { label: "重名组", value: chart.duplicate_group_size > 1 ? `${chart.duplicate_index}/${chart.duplicate_group_size}` : "--" },
+    { label: "预览来源", value: localPreview ? "本地 TJA 动态预览" : "--" },
+    { label: "预览小节", value: localPreview ? `${localPreview.shown_measure_count}/${localPreview.measure_count}` : "--" },
+    { label: "预览HS事件", value: localPreview ? formatLoose(timing.scroll_change_count, 0) : "--" },
+    { label: "预览BPM事件", value: localPreview ? formatLoose(timing.bpm_change_count, 0) : "--" },
+    { label: "预览延迟", value: localPreview ? `${formatLoose(timing.total_delay)}秒` : "--" },
+    { label: "网站", value: chart.fumen?.url || "--" },
   ];
   return `
     <section class="modal-section">
       <h3>谱面预览</h3>
       ${renderPreviewImages(chart)}
     </section>
-    <section class="modal-section">
-      <h3>数值</h3>
+    <section class="modal-section" ${feedbackEnabled ? `data-feedback-root-id="${escapeHtml(chart.id)}"` : ""}>
+      <div class="feedback-head">
+        <h3>数值</h3>
+        ${feedbackEnabled ? `<span data-feedback-status>${FEEDBACK_API_BASE ? "读取反馈中" : "反馈服务尚未配置"}</span>` : ""}
+      </div>
       <div class="detail-grid">${items
-        .map(([label, value]) => `<div class="detail-item"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`)
+        .map((item) => {
+          const canFeedback = feedbackEnabled && item.feedback;
+          return `
+            <div class="detail-item ${canFeedback ? "feedback-detail-item" : ""}" ${canFeedback ? `data-feedback-field="${escapeHtml(item.feedback)}"` : ""}>
+              <span>${escapeHtml(item.label)}</span>
+              <strong>${escapeHtml(item.value)}</strong>
+              ${canFeedback ? feedbackControlHtml(chart, item.feedback) : ""}
+            </div>
+          `;
+        })
         .join("")}</div>
     </section>
-    ${renderFeedbackSection(chart)}
   `;
 }
 
@@ -2439,11 +2438,12 @@ els.chartTableBody.addEventListener("click", (event) => {
 els.chartModalBody?.addEventListener("click", (event) => {
   const button = event.target.closest("[data-feedback-vote]");
   if (!button || button.disabled) return;
-  const section = button.closest("[data-feedback-chart-id]");
+  const section = button.closest("[data-feedback-root-id]");
   const row = button.closest("[data-feedback-field]");
-  const chart = findChartById(section?.dataset.feedbackChartId);
+  const chart = findChartById(section?.dataset.feedbackRootId);
   if (!chart || !row) return;
-  submitFeedbackVote(chart, row.dataset.feedbackField, button.dataset.feedbackVote);
+  const nextVote = button.classList.contains("is-selected") ? null : button.dataset.feedbackVote;
+  submitFeedbackVote(chart, row.dataset.feedbackField, nextVote);
 });
 
 els.recommendTableBody?.addEventListener("click", (event) => {

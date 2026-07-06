@@ -22,7 +22,7 @@ function corsHeaders(request) {
   const allowOrigin = ALLOWED_ORIGINS.has(origin) ? origin : "https://mmtumr.github.io";
   return {
     "Access-Control-Allow-Origin": allowOrigin,
-    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
     "Access-Control-Max-Age": "86400",
     Vary: "Origin",
@@ -73,6 +73,21 @@ function assertPayload(payload) {
     clientId,
     currentValue: Number.isFinite(currentValue) ? currentValue : null,
   };
+}
+
+function assertDeletePayload(payload) {
+  const chartId = cleanText(payload.chart_id, 500);
+  const field = cleanText(payload.field, 40);
+  const clientId = cleanText(payload.client_id, 80);
+
+  if (!chartId || !clientId) {
+    throw new Error("missing required fields");
+  }
+  if (!ALLOWED_FIELDS.has(field)) {
+    throw new Error("invalid field");
+  }
+
+  return { chartId, field, clientId };
 }
 
 async function getSummary(env, chartId, clientId = "") {
@@ -144,6 +159,18 @@ async function handleVote(request, env) {
   return getSummary(env, payload.chartId, payload.clientId);
 }
 
+async function handleDeleteVote(request, env) {
+  const payload = assertDeletePayload(await request.json());
+  await env.DB.prepare(
+    `DELETE FROM feedback_votes
+     WHERE chart_id = ? AND field = ? AND client_id = ?`,
+  )
+    .bind(payload.chartId, payload.field, payload.clientId)
+    .run();
+
+  return getSummary(env, payload.chartId, payload.clientId);
+}
+
 export default {
   async fetch(request, env) {
     if (request.method === "OPTIONS") {
@@ -165,6 +192,10 @@ export default {
 
       if (url.pathname === "/vote" && request.method === "POST") {
         return jsonResponse(request, await handleVote(request, env));
+      }
+
+      if (url.pathname === "/vote" && request.method === "DELETE") {
+        return jsonResponse(request, await handleDeleteVote(request, env));
       }
 
       return jsonResponse(request, { error: "not found" }, 404);

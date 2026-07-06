@@ -673,6 +673,27 @@ body.modal-open {
   border-color: var(--blue);
 }
 
+.feedback-detail-item {
+  display: grid;
+  gap: 8px;
+}
+
+.feedback-inline {
+  display: grid;
+  gap: 6px;
+}
+
+.feedback-inline .feedback-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+.feedback-inline .feedback-buttons button {
+  width: 100%;
+  min-height: 30px;
+  padding: 0 8px;
+}
+
 .preview-images {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
