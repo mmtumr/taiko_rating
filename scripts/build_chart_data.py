@@ -32,7 +32,7 @@ COURSE_LABEL = {
     "Edit": "里魔王",
 }
 
-DEFAULT_INCLUDED_COURSES = {"hard", "oni", "edit"}
+DEFAULT_INCLUDED_COURSES = {"easy", "normal", "hard", "oni", "edit"}
 
 FORCE_NORMAL_TITLES = [
     "ダーク・エクス・マキナ",

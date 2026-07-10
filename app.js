@@ -1,5 +1,5 @@
 const API_BASE = "https://kinoko.zorua.cn/api/v1";
-const DATA_VERSION = "20260706-feedback-inline";
+const DATA_VERSION = "20260710-rating-all-levels";
 const FEEDBACK_API_BASE = window.TAIKO_FEEDBACK_API_BASE || "";
 const RATING_BEST_COUNT = 30;
 const CHART_PAGE_SIZE = 10;
@@ -223,7 +223,7 @@ function fixedAverage(values, count) {
 
 function chartUsableForRating(chart) {
   const scoreLevel = Number(chart.score_level);
-  return chartAllowedBySource(chart) && !chart.rating_excluded && Number.isFinite(scoreLevel) && scoreLevel >= 3 && hasNumericValue(chart.const);
+  return chartAllowedBySource(chart) && !chart.rating_excluded && Number.isFinite(scoreLevel) && scoreLevel >= 1 && hasNumericValue(chart.const);
 }
 
 function formatScore(value) {

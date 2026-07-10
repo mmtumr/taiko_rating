@@ -1,164 +1,437 @@
 {
-  "total": 5920,
+  "total": 6779,
   "by_course": {
+    "Easy": 377,
     "Edit": 371,
     "Hard": 2822,
-    "Normal": 2,
+    "Normal": 484,
     "Oni": 2725
   },
   "by_source": {
     "encoder": 4477,
+    "encoder_pending": 859,
     "excel": 986,
     "fumen": 457
   },
-  "needs_encoder": 0,
-  "duplicate_title_groups": 115,
-  "duplicate_chart_rows": 242,
+  "needs_encoder": 859,
+  "duplicate_title_groups": 119,
+  "duplicate_chart_rows": 250,
   "exact_numeric_dedupe": {
-    "duplicate_groups_removed": 154,
-    "duplicate_rows_removed": 174,
+    "duplicate_groups_removed": 798,
+    "duplicate_rows_removed": 4942,
     "samples": [
       {
-        "kept": "ANATATO TURATTATTA♪",
-        "course": "Edit",
+        "kept": "大器晩成",
+        "course": "Normal",
         "removed": [
-          "あなたとトゥラッタッタ♪ -カバー版-"
+          "Future Labo",
+          "You Can’t Hurry Love",
+          "YELL EX MAKINA!",
+          "エール・エクス・◯◯◯！",
+          "1 2 3～恋がはじまる～",
+          "音符のうた",
+          "エール・エクス・マキナ！"
         ]
       },
       {
-        "kept": "ANATATO TURATTATTA♪",
-        "course": "Oni",
+        "kept": "Soup",
+        "course": "Easy",
         "removed": [
-          "あなたとトゥラッタッタ♪ -カバー版-"
+          "Rising Sun",
+          "Amanda",
+          "花月夜",
+          "月と太陽",
+          "バクチ・ダンサー",
+          "RAGE v.self",
+          "青春チョコレート",
+          "行け、メカドン！",
+          "如夕颜般的你",
+          "ゴジラ・メインタイトル",
+          "1 2 3～恋がはじまる～",
+          "太鼓乱舞 炎の巻",
+          "Dun Aonghasa的吹笛手",
+          "Ko Ki Ku Kuru Kuru Kure Ko!",
+          "深绯之心脏 -SCARLET HEART-",
+          "白云彼方的大地之风"
         ]
       },
       {
-        "kept": "ANATATO TURATTATTA♪",
-        "course": "Hard",
+        "kept": "Grip!",
+        "course": "Normal",
         "removed": [
-          "あなたとトゥラッタッタ♪ -カバー版-"
+          "フレンジャー",
+          "C大調",
+          "Brightdown",
+          "Love so sweet",
+          "ファッションモンスター",
+          "いけないボーダーライン",
+          "24karats TRIBE OF GOLD"
         ]
       },
       {
-        "kept": "晚餐歌",
-        "course": "Oni",
+        "kept": "恋",
+        "course": "Easy",
         "removed": [
-          "晩餐歌"
+          "ルマ",
+          "潘朶拉",
+          "残響",
+          "Flower Song",
+          "last cross",
+          "Love Forever",
+          "みかんのうた",
+          "GO! GO! MANIAC",
+          "決意の朝に",
+          "透明だった世界",
+          "ハッピーでリッパ！",
+          "24karats TRIBE OF GOLD",
+          "愛をこめて花束を",
+          "Escatumbararibê",
+          "SORA-II 格利泽581",
+          "真夜中のドア～Stay with me"
         ]
       },
       {
-        "kept": "晚餐歌",
-        "course": "Hard",
+        "kept": "360°",
+        "course": "Normal",
         "removed": [
-          "晩餐歌"
+          "夏色",
+          "hololive ondo",
+          "相思相愛",
+          "キレキャリオン",
+          "Literary Nonsense",
+          "Fun!Fun!Fun! ～夢∞～",
+          "黒銀の翼",
+          "アルプス一万尺",
+          "ドラゴンボールヒーローズ 邪悪龍ミッションシリーズ テーマソング"
         ]
       },
       {
-        "kept": "月光",
-        "course": "Hard",
+        "kept": "UZA",
+        "course": "Easy",
         "removed": [
-          "だから僕は音楽を辞めた -Cover Version-"
+          "360°",
+          "泣かないで",
+          "眠り姫",
+          "Break the Chain",
+          "ガチで勝とうゼッ！",
+          "君がくれた夏",
+          "おしりかじり虫",
+          "向夜晚奔去",
+          "くらえ！ブットバースト!!",
+          "見たこともない景色",
+          "ラブ・ストーリーは突然に",
+          "サインはB -New Arrange Ver.-",
+          "みくみくにしてあげる♪【してやんよ】",
+          "夜に駆ける -Cover Version-"
         ]
       },
       {
-        "kept": "群青",
-        "course": "Oni",
+        "kept": "来自天堂的魔鬼",
+        "course": "Normal",
         "removed": [
+          "スピード",
+          "CAT'S EYE",
+          "残響",
+          "彩虹",
+          "CHANGE!!!!",
+          "雙節棍",
+          "アイ MUST GO！",
+          "小さな掌",
+          "好きすぎて滅!",
+          "僕たちの行方",
+          "Believe in yourself",
+          "キン肉マン Go Fight!",
+          "ようこそジャパリパークへ",
+          "365日の紙飛行機",
+          "ハム太郎とっとこうた",
+          "キャンディ キャンディ",
+          "ドラえもんのうた -New Audio-",
+          "ドラえもんのうた -Old Audio-"
+        ]
+      },
+      {
+        "kept": "遥か",
+        "course": "Easy",
+        "removed": [
+          "CLOSER",
+          "ignited-イグナイテッド-",
+          "像神一样啊",
+          "彩虹",
+          "SHINY",
+          "READY!!",
+          "廻廻奇譚",
+          "ココロオドル",
+          "Winding Road",
+          "KOKOROBO",
+          "笑顔にカンパイ！",
+          "ココロ転がせっ！",
+          "ヒミツキチューバー",
+          "HAPPY SYNTHESIZER",
+          "プリンセスはあきらめない",
+          "365日の紙飛行機",
+          "シーソーゲーム ～勇敢な恋の歌～",
+          "クラリネットをこわしちゃった",
+          "線路は続くよどこまでも",
+          "DANZEN! ふたりはプリキュア (Ver.Max Heart)",
+          "廻廻奇譚"
+        ]
+      },
+      {
+        "kept": "ROKI",
+        "course": "Normal",
+        "removed": [
+          "KANEDA",
+          "L・O・B・M",
+          "MUSIC♪",
+          "GOOD BYE 夏男",
+          "迷走Mind",
+          "A New Journey",
+          "Synchronicity",
+          "Kosmos, Cosmos",
+          "マツケンサンバⅢ",
+          "MachineGun Kiss",
+          "サマーれげぇ！レインボー",
+          "365日のラブストーリー。",
+          "ソウルキャリバーV"
+        ]
+      },
+      {
+        "kept": "SMILY",
+        "course": "Easy",
+        "removed": [
+          "リライト",
+          "SPARKING 鉄拳5",
+          "LOVEずっきゅん",
+          "獨家快樂",
+          "Break Line",
+          "七彩ボタン",
+          "ゼビウス体操",
+          "虹色ミラクル",
+          "もってけ！セーラーふく",
+          "365日のラブストーリー。",
+          "脑浆炸裂GIRL",
+          "敬启，我在学校...",
+          "IAM (feat. Shogo, Tsubasa)",
+          "Kirame Kirari",
+          "Kirame Kirari",
+          "魔方阵 - summon delta -",
+          "神々が恋した幻想郷",
+          "KAZE NO KUNI NO RYUU TO KISHI",
+          "指先からはじまる物語",
+          "Kakashi-Hime: Princess Scarecrow",
+          "IOSYS Autumn Carnivorous Festival 2014",
+          "君と約束した優しいあの場所まで"
+        ]
+      },
+      {
+        "kept": "潘朶拉",
+        "course": "Normal",
+        "removed": [
+          "爱你",
+          "海の声",
+          "Reason!!",
+          "Hello,world!",
+          "OVER THE TOP",
+          "三百六十五歩のマーチ",
+          "未来コネクション",
+          "にんげんっていいな",
+          "黄ダルマ2000",
+          "魔法使いサリー",
+          "「笑うが勝ち!」でGO!",
+          "最初から今まで"
+        ]
+      },
+      {
+        "kept": "Lemon",
+        "course": "Easy",
+        "removed": [
+          "１・２・３",
+          "ありがとう",
+          "NEXT LEVEL",
+          "三百六十五歩のマーチ",
+          "那些年",
+          "残酷な夜に輝け",
+          "プリキュア５、フル・スロットルGO GO!"
+        ]
+      },
+      {
+        "kept": "366日",
+        "course": "Normal",
+        "removed": [
+          "Get Wild",
+          "Do it! Now",
+          "Just Awake",
+          "Shine!!",
+          "大迷惑",
+          "ワンダーランド",
+          "極楽浄土",
+          "遙か彼方",
+          "Highschool・love",
+          "无人之岛",
+          "妳是我的花朵",
+          "ハム太郎とっとこうた"
+        ]
+      },
+      {
+        "kept": "スカー",
+        "course": "Easy",
+        "removed": [
+          "UNITE!",
+          "366日",
+          "負けないで",
+          "distance",
+          "CANDY CANDY",
+          "恋のフーガ",
+          "ワンダーランド",
+          "シュガー・シュガー",
+          "しゅごしゅご！",
+          "ドラえもん音頭",
+          "Preserved Roses",
+          "恋のマイアヒ",
+          "負け犬返上",
+          "波風サテライト",
+          "Baladium's drive",
+          "Believe in yourself",
+          "君に、ロマンティック。",
+          "自力本願レボリューション",
+          "流浪的琥珀公主",
+          "We are the ONE ～僕らはひとつ～",
+          "華蕾夢ミル狂詩曲～魂ノ導～",
+          "そばかす -New Audio-",
+          "そばかす -Old Audio-"
+        ]
+      },
+      {
+        "kept": "920 feat.小宇",
+        "course": "Normal",
+        "removed": [
+          "散步",
+          "Real voice",
+          "PON PON PON",
+          "VIVIVIVID",
+          "告別輓歌",
+          "Hero",
+          "DANCE! おジャ魔女",
+          "only my railgun",
+          "気まぐれロマンティック",
+          "入陣曲",
+          "君に、ロマンティック。",
+          "蝶恋",
+          "キミとボクのミライ",
+          "あつまれ☆太鼓まつり！"
+        ]
+      },
+      {
+        "kept": "920 feat.小宇",
+        "course": "Easy",
+        "removed": [
+          "群青",
+          "Dive to Blue",
+          "プラスティック・ラブ",
+          "お願い！セニョリータ",
+          "気まぐれロマンティック",
+          "小咚音头",
+          "That's The Way (I Like It)",
+          "Vault That Borderline!",
+          "Starry Heavens ver.2013",
+          "手のひらを太陽に",
+          "クラシックメドレー(ホームパーティ編)",
+          "思春期を殺した少年の翼",
           "群青"
         ]
       },
       {
-        "kept": "群青",
-        "course": "Hard",
+        "kept": "NAINAINAI",
+        "course": "Normal",
         "removed": [
-          "群青"
-        ]
-      },
-      {
-        "kept": "Harudion",
-        "course": "Oni",
-        "removed": [
-          "Harudion",
-          "Harudion"
-        ]
-      },
-      {
-        "kept": "Harudion",
-        "course": "Hard",
-        "removed": [
-          "Harudion"
-        ]
-      },
-      {
-        "kept": "Highschool love!",
-        "course": "Oni",
-        "removed": [
-          "Highschool・love"
-        ]
-      },
-      {
-        "kept": "怪物",
-        "course": "Oni",
-        "removed": [
-          "怪物"
-        ]
-      },
-      {
-        "kept": "怪物",
-        "course": "Hard",
-        "removed": [
-          "怪物"
-        ]
-      },
-      {
-        "kept": "Natsumatsuri",
-        "course": "Oni",
-        "removed": [
-          "Natsumatsuri"
-        ]
-      },
-      {
-        "kept": "樱桃",
-        "course": "Oni",
-        "removed": [
+          "SOUVENIR",
+          "Rising Sun",
           "樱桃",
+          "樱桃",
+          "Butter-Fly",
+          "モンキー・マジック",
+          "A Perfect Sky",
+          "アジアの純真",
+          "フンダリー　ケッタリー",
+          "気がつけば　あなた",
+          "ひまわりの約束",
+          "六甲おろし",
+          "プリンセスはあきらめない",
+          "炎と森のカーニバル",
           "樱桃"
         ]
       },
       {
-        "kept": "樱桃",
-        "course": "Hard",
+        "kept": "アポロ",
+        "course": "Easy",
         "removed": [
-          "樱桃",
-          "樱桃"
+          "Homenobi",
+          "I wonder",
+          "アローラ!!",
+          "【双打】 恋",
+          "コイ♥クル",
+          "A Perfect Sky",
+          "Hello,world!",
+          "せかいのおと - sekai note -",
+          "星影のエール",
+          "拔蘿蔔",
+          "全力バタンキュー",
+          "Act! Addict! Actors!",
+          "Fun!Fun!Fun! ～夢∞～",
+          "ようかい体操第一",
+          "おさかな毎日！さかなクン",
+          "ほんわか家族～ネコトモのうた～"
         ]
       },
       {
-        "kept": "上海ハニー",
-        "course": "Hard",
+        "kept": "ABC",
+        "course": "Normal",
         "removed": [
-          "上海ハニー"
+          "NANANA",
+          "我是誰我是誰我是誰",
+          "祝福",
+          "independent",
+          "DIVE TO WORLD",
+          "お願いマッスル",
+          "BRAND NEW WORLD",
+          "FAMIRES WARS",
+          "Connect Colours",
+          "恋するフォーチュンクッキー",
+          "An American in Paris",
+          "心跳不已的恋爱预感！？",
+          "ミッション！健・康・第・イチ",
+          "Starry Heavens ver.2013",
+          "shiny smile",
+          "shiny smile",
+          "深绯之心脏 -SCARLET HEART-",
+          "FAMIRES WARS"
         ]
       },
       {
-        "kept": "Shine!!",
-        "course": "Oni",
+        "kept": "ABC",
+        "course": "Easy",
         "removed": [
-          "Shine"
-        ]
-      },
-      {
-        "kept": "Show",
-        "course": "Oni",
-        "removed": [
-          "Show"
-        ]
-      },
-      {
-        "kept": "Show",
-        "course": "Hard",
-        "removed": [
-          "Show"
+          "杂草",
+          "ファミリードンドン",
+          "L・O・B・M",
+          "イイコ進化論（feat. O-LuHA）",
+          "きらきらキラー",
+          "我就是這樣",
+          "ふるふるフューチャー☆",
+          "PONPOKO RHYTHM",
+          "七彩ボタン",
+          "Brand New Theater!",
+          "エレクトリック・ポストマン",
+          "银河奥特曼之歌",
+          "特雷门狂想曲",
+          "ルカルカ★ナイトフィーバー",
+          "相容れぬ念い",
+          "KAGAYAKI WO MOTOMETE",
+          "アイネクライネナハトムジーク",
+          "蜕变",
+          "古典乐组曲（摇滚篇）",
+          "Help me, ERINNNNNN!! 小林幸子ver.",
+          "妖怪ウォッチ2 元祖／本家／真打"
         ]
       }
     ]
