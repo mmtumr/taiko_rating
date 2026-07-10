@@ -74,6 +74,16 @@
     { key: "complex", label: "复合处理" },
   ];
 
+  const CLASSIC_AGGREGATE_REFERENCE = {
+    overall: { threshold: 14.5892210976943, fullMedian: 15.2775466297957, fullWeighted: 15.3068290137788 },
+    power: { threshold: 14.5445421349924, fullMedian: 15.2637671006991, fullWeighted: 15.294238850735 },
+    stamina: { threshold: 13.3638754177458, fullMedian: 14.6837426405408, fullWeighted: 14.9189624636074 },
+    speed: { threshold: 13.9975917429048, fullMedian: 14.2480036541132, fullWeighted: 14.5890753162058 },
+    accuracy: { threshold: 15.0844411582434, fullMedian: 15.4361852255512, fullWeighted: 15.4504973206476 },
+    rhythm: { threshold: 14.0211817943885, fullMedian: 14.5239364620827, fullWeighted: 14.834438652416 },
+    complex: { threshold: 13.4188645707724, fullMedian: 13.7662826486079, fullWeighted: 14.2622361946173 },
+  };
+
   const IMAGE_W = 1440;
   const IMAGE_H = 1900;
   const CLASSIC_BEST_COUNT = 20;
@@ -91,6 +101,28 @@
 
   function averageTop(values, count = CLASSIC_BEST_COUNT) {
     return fixedAverage([...values].filter(Number.isFinite).sort((a, b) => b - a).slice(0, count), count);
+  }
+
+  function calculateClassicAggregate(values, metric) {
+    const ranked = [...values].filter(Number.isFinite).sort((a, b) => b - a).slice(0, CLASSIC_BEST_COUNT);
+    if (!ranked.length) return 0;
+    if (ranked.length < CLASSIC_BEST_COUNT) {
+      const middle = Math.floor(ranked.length / 2);
+      return ranked.length % 2 ? ranked[middle] : (ranked[middle - 1] + ranked[middle]) / 2;
+    }
+    const average = (items) => items.reduce((sum, value) => sum + value, 0) / items.length;
+    const weighted =
+      0.4 * average(ranked.slice(0, 5)) +
+      0.3 * average(ranked.slice(5, 10)) +
+      0.2 * average(ranked.slice(10, 16)) +
+      0.1 * average(ranked.slice(16, 20));
+    const median = (ranked[9] + ranked[10]) / 2;
+    const reference = CLASSIC_AGGREGATE_REFERENCE[metric];
+    const compensation = Math.max(
+      (weighted - reference.threshold) / (reference.fullWeighted - reference.threshold),
+      0,
+    );
+    return median + compensation * (15.5 - reference.fullMedian);
   }
 
   function isPassedRow(row) {
@@ -117,7 +149,7 @@
     if (!Number.isFinite(g) || g < 0.5) return null;
     if (g <= 0.6832) return 4425 * Math.pow(g - 0.5, 4.876);
     if (g <= 0.9625) return 30.748 * g - 19.88;
-    return 0.228 * Math.exp(3.386 * Math.pow(g, 24.658)) + 8.862;
+    return 0.228 * Math.pow(2.718, 3.386 * Math.pow(g, 24.658)) + 8.862;
   }
 
   function powerMean(a, b, weight, power) {
@@ -192,9 +224,12 @@
     return {
       rows: classicRows,
       b20: classicRows.slice(0, CLASSIC_BEST_COUNT),
-      rating: averageTop(classicRows.map((row) => row.classicSingle), CLASSIC_BEST_COUNT),
+      rating: calculateClassicAggregate(classicRows.map((row) => row.classicSingle), "overall"),
       dimensions: Object.fromEntries(
-        DIMENSIONS.map((dim) => [dim.key, averageTop(classicRows.map((row) => row.dimensions[dim.key]), CLASSIC_BEST_COUNT)]),
+        DIMENSIONS.map((dim) => [
+          dim.key,
+          calculateClassicAggregate(classicRows.map((row) => row.dimensions[dim.key]), dim.key),
+        ]),
       ),
     };
   }
