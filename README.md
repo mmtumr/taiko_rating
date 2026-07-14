@@ -28,9 +28,10 @@ settings, enable Pages with source `Deploy from a branch`, branch `main`, folder
 The main Rating remains the absolute strength indicator. The six numeric
 abilities use the local v3 encoder catalog embedded in `chart_data.json`:
 stamina, hand speed, burst, accuracy, rhythm, and complex. The catalog covers
-all Oni/Edit/Hard charts plus the explicitly included Normal charts
-`DARK EX MACHINA♡` and `幽玄之乱`; Sakura v2 is retained only as a compatibility
-fallback. Each player ability is a
+all Oni/Edit/Hard charts plus generated Normal reference charts
+`DARK EX MACHINA♡` and `幽玄之乱`; the Easy/Normal rows for these two songs
+remain excluded from Rating while their Hard and higher rows are included.
+Sakura v2 is retained only as a compatibility fallback. Each player ability is a
 weighted Best 15, with weights `1.0 / 0.8 / 0.6` for each group of five.
 
 The radar polygon is a relative profile centered at 50. Its baseline is the
