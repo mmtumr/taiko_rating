@@ -11,7 +11,7 @@
       <header class="topbar">
         <div>
           <h1>Taiko Rating</h1>
-          <p>表 Rating B20 / 里 Rating B30</p>
+          <p>综合 Rating B20 / 推荐歌曲定数</p>
         </div>
         <div class="topbar-actions">
           <label class="toggle-line">
@@ -20,11 +20,11 @@
           </label>
           <div class="summary-strip">
             <div>
-              <span>表 Rating</span>
+              <span>综合 Rating</span>
               <strong id="classicRatingValue">--</strong>
             </div>
             <div>
-              <span>里 Rating</span>
+              <span>推荐定数</span>
               <strong id="ratingValue">--</strong>
             </div>
             <div>
@@ -88,10 +88,10 @@
 
             <section class="panel">
               <div class="panel-head">
-                <h2>Rating B20 / B30</h2>
+                <h2>综合 Rating B20</h2>
                 <div class="button-row rating-actions">
-                  <button id="curveButton" type="button">里 Rating 规则</button>
-                  <button id="classicRuleButton" type="button">表 Rating 规则</button>
+                  <button id="curveButton" type="button">推荐定数规则</button>
+                  <button id="classicRuleButton" type="button">综合 Rating 规则</button>
                   <button id="recalculateButton" type="button">刷新</button>
                   <button id="exportButton" type="button">下载 PNG</button>
                 </div>
@@ -265,19 +265,15 @@
       <section class="modal-panel curve-modal-panel" role="dialog" aria-modal="true" aria-labelledby="curveModalTitle">
         <div class="modal-head">
           <div>
-            <span>里 Rating 规则</span>
-            <h2 id="curveModalTitle">能打什么定数</h2>
+            <span>推荐定数规则</span>
+            <h2 id="curveModalTitle">大约能打什么定数</h2>
           </div>
           <button id="curveModalClose" class="modal-close" type="button">关闭</button>
         </div>
         <div class="modal-body">
-          <figure class="curve-figure">
-            <img src="taiko_rating_curve.png?v=20260706-feedback-inline" alt="太鼓新 Rating 分数补正曲线" />
-            <figcaption>里 Rating 单曲评价 = 谱面定数 + 分数补正。</figcaption>
-          </figure>
           <div class="rule-copy">
-            <p>里 Rating 是为了描述“你大致能打什么定数的歌曲”而设计的：它只统计已经过关的成绩，并按分数曲线给单曲定数加上补正。</p>
-            <p>这个数值主要补足表 Rating 对入门和非顶尖玩家不够友好的问题。表 Rating 很依赖良率与旧公式映射，低分段容易出现“数值很好看但不直观对应能打的定数”的情况；里 Rating 则优先把过关能力放在中心。</p>
+            <p>推荐定数由综合 Rating 映射到历史段位赤合格能力，再换算为对应段位歌曲的平均传统定数。</p>
+            <p>换算采用初段到达人的单调分段曲线；例如综合 Rating 0.88 对应推荐定数约 6.93。它表示稳定适玩的中心值，不是偶然过关上限。</p>
           </div>
         </div>
       </section>
@@ -287,15 +283,15 @@
       <section class="modal-panel curve-modal-panel" role="dialog" aria-modal="true" aria-labelledby="classicRuleModalTitle">
         <div class="modal-head">
           <div>
-            <span>表 Rating 规则</span>
+            <span>综合 Rating 规则</span>
             <h2 id="classicRuleModalTitle">旧公式与六维</h2>
           </div>
           <button id="classicRuleModalClose" class="modal-close" type="button">关闭</button>
         </div>
         <div class="modal-body">
           <div class="rule-copy">
-            <h3>表 Rating</h3>
-            <p>表 Rating 的单曲公式与 SakuraBot 综合精度算法一致：先把谱面定数映射成“定数得点 x”，再把（良 + 可 × 0.5）÷ 总 Note 映射成“良率表现 y”，最后合成为单曲表 Rating。所有难度均可参与，总分为单曲 Rating 前 20 名的算术平均。</p>
+            <h3>综合 Rating</h3>
+            <p>综合 Rating 的单曲公式与 SakuraBot 综合精度算法一致：先把谱面定数映射成“定数得点 x”，再把（良 + 可 × 0.5）÷ 总 Note 映射成“良率表现 y”，最后合成为单曲综合 Rating。所有难度均可参与，总分为单曲 Rating 前 20 名的算术平均；同一歌曲的不同难度分别计入。</p>
             <h3>关键数值</h3>
             <p>定数得点是把谱面定数换算成旧公式内部难度分的结果。它不是原始定数，而是“这首谱面本身有多难”的非线性分值，越高定数增长越快。</p>
             <p>复合数值表示谱面里需要手顺处理的复合配置强度，主要描述长复合、复杂复合、复合密集段带来的处理压力。</p>
@@ -331,7 +327,7 @@
     <script>
       window.TAIKO_FEEDBACK_API_BASE = "https://taiko-rating-feedback.mmtumr.workers.dev";
     </script>
-    <script src="rating_image.js?v=20260712-v2-ability-profile"></script>
-    <script src="app.js?v=20260712-v2-ability-profile"></script>
+    <script src="rating_image.js?v=20260715-classic-rating-constant"></script>
+    <script src="app.js?v=20260715-classic-rating-constant"></script>
   </body>
 </html>

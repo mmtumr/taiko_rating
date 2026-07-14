@@ -1,7 +1,6 @@
 const API_BASE = "https://kinoko.zorua.cn/api/v1";
-const DATA_VERSION = "20260713-v3-full-ability-profile";
+const DATA_VERSION = "20260715-classic-rating-constant";
 const FEEDBACK_API_BASE = window.TAIKO_FEEDBACK_API_BASE || "";
-const RATING_BEST_COUNT = 30;
 const CHART_PAGE_SIZE = 10;
 const RECOMMEND_COUNT = 20;
 
@@ -62,10 +61,8 @@ const state = {
   primaryConstantsByTitle: new Map(),
   constantsByTitle: new Map(),
   rated: [],
-  uraRated: [],
-  ratingBest: [],
   ratingObjects: [],
-  ratingSummary: { classic: { rating: 0, dimensions: {} }, ura: { rating: 0 }, matchedCount: 0 },
+  ratingSummary: { classic: { rating: 0, dimensions: {} }, recommendedConstant: 0, matchedCount: 0 },
   selectedRatingIndex: null,
   chartBrowserRows: [],
   recommendationRows: [],
@@ -164,6 +161,16 @@ function levelName(level) {
     4: "鬼",
     5: "里",
   }[String(level)] ?? String(level);
+}
+
+function levelColor(level) {
+  return {
+    1: "#e53935",
+    2: "#70ad47",
+    3: "#258bd2",
+    4: "#e83e8c",
+    5: "#7b3fb2",
+  }[String(level)] ?? "#8b949e";
 }
 
 function sourceLabel(source, needsEncoder = false) {
@@ -700,22 +707,14 @@ function rateRecords(records) {
 
 function calculateRating() {
   const bestRecords = pickBestRecords(state.records);
-  const bestPassedRecords = pickBestRecords(state.records.filter(isPassedRecord));
   const rated = rateRecords(bestRecords);
-  const uraRated = rateRecords(bestPassedRecords).filter((row) => row.passed && Number.isFinite(row.single));
 
   state.rated = rated;
-  state.uraRated = uraRated;
-  state.ratingBest = uraRated.slice(0, RATING_BEST_COUNT);
   const classicMetrics = window.TaikoRatingImage?.calculateClassicMetrics?.(rated) || { b20: [], rating: 0, dimensions: {} };
-  const uraRating = fixedAverage(state.ratingBest.map((row) => row.single), RATING_BEST_COUNT);
   const classicBest = classicMetrics.b20 || [];
   els.classicRatingValue.textContent = formatRatingValue(classicMetrics.rating);
-  els.ratingValue.textContent = formatRatingValue(uraRating);
-  state.ratingObjects = [
-    ...state.ratingBest.map((row) => ({ mode: "里", row, displaySingle: row.single })),
-    ...classicBest.map((row) => ({ mode: "表", row, displaySingle: row.classicSingle })),
-  ];
+  els.ratingValue.textContent = formatRatingValue(classicMetrics.recommendedConstant);
+  state.ratingObjects = classicBest.map((row) => ({ mode: "综合", row, displaySingle: row.classicSingle }));
   if (!state.ratingObjects.length) state.selectedRatingIndex = null;
   else if (state.selectedRatingIndex == null || state.selectedRatingIndex >= state.ratingObjects.length) state.selectedRatingIndex = 0;
 
@@ -723,7 +722,7 @@ function calculateRating() {
   els.matchedCount.textContent = String(rated.length);
   state.ratingSummary = {
     classic: classicMetrics,
-    ura: { rating: uraRating },
+    recommendedConstant: classicMetrics.recommendedConstant,
     matchedCount: rated.length,
   };
   renderRatingTable();
@@ -779,27 +778,22 @@ function renderRatingTable(summary = state.ratingSummary) {
   }
 
   const width = 1900;
-  const height = 2400;
+  const height = 1540;
   const margin = 34;
-  const gap = 28;
+  const gap = 22;
   const columnWidth = (width - margin * 2 - gap) / 2;
-  const rowHeight = 58;
-  const rowGap = 5;
-  const headerHeight = 106;
-  const sectionY = 330;
-  const sections = [
-    { mode: "里", title: "里 Rating B30", x: margin, color: "#246f92", total: summary.ura?.rating, count: RATING_BEST_COUNT },
-    { mode: "表", title: "表 Rating B20", x: margin + columnWidth + gap, color: "#a23b35", total: summary.classic?.rating, count: 20 },
-  ];
+  const rowHeight = 102;
+  const rowGap = 8;
+  const sectionY = 320;
   const topCards = `
     <g>
-      <rect x="${margin}" y="44" width="340" height="118" rx="8" fill="#f2f8fb" stroke="#d0dde4" />
-      <text x="${margin + 24}" y="86" font-size="20" font-weight="800" fill="#246f92">里 Rating 总分</text>
-      <text x="${margin + 316}" y="126" font-size="42" font-weight="800" fill="#246f92" text-anchor="end">${escapeHtml(formatRatingValue(summary.ura?.rating))}</text>
+      <rect x="${margin}" y="44" width="340" height="118" rx="8" fill="#fff7f4" stroke="#e6d7d1" />
+      <text x="${margin + 24}" y="86" font-size="20" font-weight="800" fill="#a23b35">综合 Rating / B20</text>
+      <text x="${margin + 316}" y="126" font-size="42" font-weight="800" fill="#a23b35" text-anchor="end">${escapeHtml(formatRatingValue(summary.classic?.rating))}</text>
 
-      <rect x="${margin}" y="186" width="340" height="100" rx="8" fill="#fff7f4" stroke="#e6d7d1" />
-      <text x="${margin + 24}" y="226" font-size="20" font-weight="800" fill="#a23b35">表 Rating 总分</text>
-      <text x="${margin + 316}" y="258" font-size="38" font-weight="800" fill="#a23b35" text-anchor="end">${escapeHtml(formatRatingValue(summary.classic?.rating))}</text>
+      <rect x="${margin}" y="178" width="340" height="108" rx="8" fill="#f2f8fb" stroke="#d0dde4" />
+      <text x="${margin + 24}" y="220" font-size="20" font-weight="800" fill="#246f92">推荐歌曲定数</text>
+      <text x="${margin + 316}" y="258" font-size="38" font-weight="800" fill="#246f92" text-anchor="end">${escapeHtml(formatRatingValue(summary.recommendedConstant))}</text>
 
       <rect x="${margin + 370}" y="44" width="260" height="242" rx="8" fill="#ffffff" stroke="#d9dee5" />
       <text x="${margin + 394}" y="88" font-size="20" font-weight="800" fill="#20252b">匹配谱面</text>
@@ -813,70 +807,41 @@ function renderRatingTable(summary = state.ratingSummary) {
     </g>
   `;
 
-  const sectionSvg = sections
-    .map(
-      (section) => {
-        const entries = rows
-          .map((item, index) => ({ item, index }))
-          .filter((entry) => entry.item.mode === section.mode)
-          .slice(0, section.count);
-        const y = sectionY;
-        const rowSvg = entries
-          .map((entry, rankIndex) => {
-            const item = entry.item;
-            const row = item.row;
-            const rowY = y + headerHeight + rankIndex * (rowHeight + rowGap);
-            const selected = state.selectedRatingIndex === entry.index;
-            const fill = selected ? "#eef7fb" : "#ffffff";
-            const stroke = selected ? section.color : "#d9dee5";
-            const title = escapeHtml(truncateText(row.title, 28));
-            const matchedTitle = escapeHtml(truncateText(row.constantTitle, 32));
-            const source = escapeHtml(sourceLabel(row.chartSource, row.needsEncoder));
-            const subtitle = escapeHtml(`${levelName(row.level)} · ${source}`);
-            const score = escapeHtml(formatScore(row.highScore));
-            const rank = escapeHtml(scoreRankLabel(row.bestScoreRank, row.highScore));
-            const rankFill = scoreRankSvgFill(row.bestScoreRank, row.highScore);
-            const single = escapeHtml(formatSingle(item.displaySingle));
-            const constant = escapeHtml(Number(row.constant).toFixed(1));
-            const bonus = escapeHtml(formatBonus(row.bonus));
-            return `
-              <g class="rating-svg-row" data-rating-index="${entry.index}" tabindex="0" role="button">
-                <rect x="${section.x}" y="${rowY}" width="${columnWidth}" height="${rowHeight}" rx="8" fill="${fill}" stroke="${stroke}" stroke-width="${selected ? 2 : 1}" />
-                <rect x="${section.x}" y="${rowY}" width="5" height="${rowHeight}" rx="2" fill="${section.color}" />
-                <text x="${section.x + 18}" y="${rowY + 31}" font-size="17" font-weight="700" fill="#8b949e">${String(rankIndex + 1).padStart(2, "0")}</text>
-                <text x="${section.x + 58}" y="${rowY + 20}" font-size="16" font-weight="700" fill="#20252b">${title}</text>
-                <text x="${section.x + 58}" y="${rowY + 38}" font-size="12" fill="#66717d">匹配：${matchedTitle}</text>
-                <text x="${section.x + 58}" y="${rowY + 52}" font-size="11" fill="#8b949e">${subtitle}</text>
-                <text x="${section.x + columnWidth - 468}" y="${rowY + 31}" font-size="15" font-weight="700" fill="#20252b" text-anchor="end">${score}</text>
-                <text x="${section.x + columnWidth - 358}" y="${rowY + 31}" font-size="15" font-weight="800" fill="${rankFill}" text-anchor="end">${rank}</text>
-                <text x="${section.x + columnWidth - 262}" y="${rowY + 31}" font-size="16" font-weight="700" fill="#20252b" text-anchor="end">${constant}</text>
-                <text x="${section.x + columnWidth - 162}" y="${rowY + 31}" font-size="15" fill="#66717d" text-anchor="end">${bonus}</text>
-                <text x="${section.x + columnWidth - 22}" y="${rowY + 32}" font-size="22" font-weight="800" fill="${section.color}" text-anchor="end">${single}</text>
-              </g>
-            `;
-          })
-          .join("");
-        return `
-          <g>
-            <rect x="${section.x}" y="${y}" width="${columnWidth}" height="${height - y - 30}" rx="10" fill="#fbfcfd" stroke="#d9dee5" />
-            <text x="${section.x + 22}" y="${y + 40}" font-size="28" font-weight="800" fill="${section.color}">${section.title}</text>
-            <text x="${section.x + columnWidth - 22}" y="${y + 40}" font-size="30" font-weight="800" fill="${section.color}" text-anchor="end">${escapeHtml(formatRatingValue(section.total))}</text>
-            <text x="${section.x + columnWidth - 22}" y="${y + 68}" font-size="14" fill="#66717d" text-anchor="end">总分 / B${section.count}</text>
-            <text x="${section.x + columnWidth - 468}" y="${y + 95}" font-size="12" fill="#8b949e" text-anchor="end">总分</text>
-            <text x="${section.x + columnWidth - 358}" y="${y + 95}" font-size="12" fill="#8b949e" text-anchor="end">评价</text>
-            <text x="${section.x + columnWidth - 262}" y="${y + 95}" font-size="12" fill="#8b949e" text-anchor="end">定数</text>
-            <text x="${section.x + columnWidth - 162}" y="${y + 95}" font-size="12" fill="#8b949e" text-anchor="end">补正</text>
-            <text x="${section.x + columnWidth - 22}" y="${y + 95}" font-size="12" fill="#8b949e" text-anchor="end">单曲R</text>
-            ${rowSvg}
-          </g>
-        `;
-      },
-    )
-    .join("");
+  const rowSvg = rows.slice(0, 20).map((item, rankIndex) => {
+    const row = item.row;
+    const column = Math.floor(rankIndex / 10);
+    const line = rankIndex % 10;
+    const x = margin + column * (columnWidth + gap);
+    const rowY = sectionY + 82 + line * (rowHeight + rowGap);
+    const selected = state.selectedRatingIndex === rankIndex;
+    const accent = levelColor(row.level);
+    const goodRate = Number(row.goodRate);
+    return `
+      <g class="rating-svg-row" data-rating-index="${rankIndex}" tabindex="0" role="button">
+        <rect x="${x}" y="${rowY}" width="${columnWidth}" height="${rowHeight}" rx="8" fill="${selected ? "#fff7f4" : "#ffffff"}" stroke="${selected ? "#a23b35" : "#d9dee5"}" stroke-width="${selected ? 2 : 1}" />
+        <rect x="${x}" y="${rowY}" width="7" height="${rowHeight}" rx="3" fill="${accent}" />
+        <text x="${x + 20}" y="${rowY + 54}" font-size="18" font-weight="700" fill="#8b949e">${String(rankIndex + 1).padStart(2, "0")}</text>
+        <text x="${x + 62}" y="${rowY + 28}" font-size="18" font-weight="700" fill="#20252b">${escapeHtml(truncateText(row.title, 30))}</text>
+        <text x="${x + 62}" y="${rowY + 54}" font-size="14" font-weight="700" fill="${accent}">${escapeHtml(levelName(row.level))} · 定数 ${escapeHtml(Number(row.constant).toFixed(1))}</text>
+        <text x="${x + 62}" y="${rowY + 79}" font-size="13" fill="#66717d">良率 ${Number.isFinite(goodRate) ? `${(goodRate * 100).toFixed(1)}%` : "--"} · ${escapeHtml(formatScore(row.highScore))}</text>
+        <text x="${x + columnWidth - 126}" y="${rowY + 55}" font-size="16" font-weight="800" fill="${scoreRankSvgFill(row.bestScoreRank, row.highScore)}" text-anchor="end">${escapeHtml(scoreRankLabel(row.bestScoreRank, row.highScore))}</text>
+        <text x="${x + columnWidth - 22}" y="${rowY + 58}" font-size="25" font-weight="800" fill="#a23b35" text-anchor="end">${escapeHtml(formatSingle(item.displaySingle))}</text>
+      </g>
+    `;
+  }).join("");
+
+  const sectionSvg = `
+    <g>
+      <rect x="${margin}" y="${sectionY}" width="${width - margin * 2}" height="${height - sectionY - 30}" rx="10" fill="#fbfcfd" stroke="#d9dee5" />
+      <text x="${margin + 22}" y="${sectionY + 44}" font-size="28" font-weight="800" fill="#a23b35">综合 Rating B20</text>
+      <text x="${width - margin - 22}" y="${sectionY + 44}" font-size="16" fill="#66717d" text-anchor="end">同一歌曲的松、鬼、里等不同难度分别计入</text>
+      ${rowSvg}
+    </g>
+  `;
 
   els.ratingSvgWrap.className = "rating-svg-wrap";
   els.ratingSvgWrap.innerHTML = `
-    <svg id="ratingObjectSvg" class="rating-object-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" role="img" aria-label="Rating B20/B30">
+    <svg id="ratingObjectSvg" class="rating-object-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" role="img" aria-label="综合 Rating B20">
       <defs>
         <linearGradient id="rankRainbow" x1="0%" y1="0%" x2="100%" y2="0%">
           <stop offset="0%" stop-color="#e03131" />
@@ -905,12 +870,11 @@ function renderRatingDetail(item) {
 
   const row = item.row;
   const classic = window.TaikoRatingImage?.calculateClassicSingle?.(row);
-  const noteTotal = Number(row.good) + Number(row.ok) + Number(row.ng);
-  const goodRate = noteTotal > 0 ? row.good / noteTotal : null;
+  const goodRate = classic?.goodRate;
   const dims = classic?.dimensions || {};
   const f = row.features || {};
   const items = [
-    ["Rating对象", `${item.mode} Rating ${item.mode === "里" ? "B30" : "B20"}`],
+    ["Rating对象", "综合 Rating B20"],
     ["曲名", row.title],
     ["匹配谱面", row.constantTitle],
     ["难度", levelName(row.level)],
@@ -921,10 +885,8 @@ function renderRatingDetail(item) {
     ["通关次数", formatLoose(row.clearCount, 0)],
     ["良 / 可 / 不可", `${row.good} / ${row.ok} / ${row.ng}`],
     ["良率", percent(goodRate)],
-    ["分数补正", formatBonus(row.bonus)],
     ["当前单曲R", formatSingle(item.displaySingle)],
-    ["单曲里R", Number.isFinite(row.single) ? row.single.toFixed(2) : "--"],
-    ["单曲表R", classic ? classic.classicSingle.toFixed(2) : "--"],
+    ["单曲综合R", classic ? classic.classicSingle.toFixed(2) : "--"],
     ["定数得点 x", classic ? classic.x.toFixed(2) : "--"],
     ["良率表现 y", classic ? classic.y.toFixed(2) : "--"],
     ["体力", formatNumber(dims.stamina)],
@@ -1243,8 +1205,8 @@ function practiceDescription(dims) {
   if (dims.length > 1 && keys.has("accuracy")) return `会优先挑选同时适合 ${names} 的谱面；精度力偏向略低定数，其余对象按谱面特征筛选。`;
   if (dims.length > 1) return `会优先挑选在 ${names} 上都比较合适的谱面。`;
   if (keys.has("accuracy")) return "精度力偏向推荐略低定数的歌曲。";
-  if (dims.length) return `优先挑选接近当前里 Rating、并能练到 ${names} 的谱面。`;
-  return "六维数据不足时，优先按定数接近当前里 Rating 推荐。";
+  if (dims.length) return `优先挑选接近当前推荐定数、并能练到 ${names} 的谱面。`;
+  return "六维数据不足时，优先按当前推荐定数挑选谱面。";
 }
 
 function desiredDeltaForPractice(dims) {
@@ -1320,13 +1282,13 @@ function recommendationJitter(chart) {
 }
 
 function buildRecommendations() {
-  const rating = Number(state.ratingSummary?.ura?.rating);
+  const rating = Number(state.ratingSummary?.recommendedConstant);
   if (!Number.isFinite(rating) || rating <= 0) return { rating, weakDims: [], practiceDims: [], rows: [] };
   const weakDims = getWeakDimensions(state.ratingSummary?.classic?.tendencies || {});
   const practiceDims = getSelectedPracticeDims(weakDims);
   const balancedPractice = isAutoPracticeSelection() && practiceDims.length > 1;
   const desiredDelta = desiredDeltaForPractice(practiceDims);
-  const b30Ids = new Set(state.ratingBest.map((row) => row.chart?.raw?.id).filter(Boolean));
+  const b30Ids = new Set((state.ratingSummary?.classic?.b20 || []).map((row) => row.chart?.raw?.id).filter(Boolean));
   const scoredCharts = [];
 
   for (const chart of state.chartData) {
@@ -1387,7 +1349,7 @@ function renderRecommendations() {
   state.recommendationRows = rows;
 
   if (!Number.isFinite(rating) || rating <= 0) {
-    els.recommendSummary.innerHTML = '<span class="recommend-chip">暂无里 Rating</span>';
+    els.recommendSummary.innerHTML = '<span class="recommend-chip">暂无推荐定数</span>';
     els.recommendWeakness.textContent = "先获取成绩并刷新 Rating 后，再生成进步推荐。";
     els.recommendCount.textContent = "";
     els.recommendTableBody.innerHTML = '<tr><td colspan="7" class="empty-cell">暂无可推荐歌曲</td></tr>';
@@ -1400,7 +1362,7 @@ function renderRecommendations() {
   const sourceText = getRecommendUseEncoder() ? "含神经网络" : "不含神经网络";
   const difficultyText = getRecommendAllowLowDifficulty() ? "含松以下" : "仅鬼/里";
   els.recommendSummary.innerHTML = `
-    <span class="recommend-chip"><strong>${escapeHtml(formatRatingValue(rating))}</strong> 里 Rating</span>
+    <span class="recommend-chip"><strong>${escapeHtml(formatRatingValue(rating))}</strong> 适玩定数</span>
     <span class="recommend-chip">${escapeHtml(formatNumber(lower, 1))} - ${escapeHtml(formatNumber(upper, 1))} 推荐定数</span>
     <span class="recommend-chip">练习对象 ${escapeHtml(targetText)}</span>
     <span class="recommend-chip">${escapeHtml(sourceText)}</span>
@@ -2374,7 +2336,7 @@ async function exportPng() {
   els.exportButton.textContent = "生成中";
   try {
     const canvas = document.createElement("canvas");
-    window.TaikoRatingImage.renderRatingImage(canvas, { allRows: state.rated, classicRows: state.rated, uraRows: state.uraRated });
+    window.TaikoRatingImage.renderRatingImage(canvas, { allRows: state.rated, classicRows: state.rated });
     const blob = await canvasToBlob(canvas);
     if (!blob) throw new Error("PNG 生成失败");
     const filename = `taiko-rating-${Date.now()}.png`;

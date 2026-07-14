@@ -10,6 +10,11 @@ This is a static browser app for:
 - rendering chart previews generated from local ESE/TJA files
 - rendering and exporting a share image
 
+The user-facing score is the classic comprehensive B20 Rating. A monotonic
+piecewise curve calibrated from historical red-pass Dan requirements converts
+that Rating into a recommended traditional chart constant. Different
+difficulties of the same song are independent B20 candidates.
+
 Run a local static server before opening the app, because the browser needs to
 fetch `data/chart_data.json` and `data/local_chart_previews.json`:
 
@@ -25,7 +30,7 @@ settings, enable Pages with source `Deploy from a branch`, branch `main`, folder
 
 ## V3 ability profile
 
-The main Rating remains the absolute strength indicator. The six numeric
+The comprehensive Rating remains the absolute strength indicator. The six numeric
 abilities use the local v3 encoder catalog embedded in `chart_data.json`:
 stamina, hand speed, burst, accuracy, rhythm, and complex. The catalog covers
 all Oni/Edit/Hard charts plus generated Normal reference charts

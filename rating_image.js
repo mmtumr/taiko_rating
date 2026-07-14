@@ -76,8 +76,11 @@
   const ABILITY_BEST_COUNT = 15;
   let abilityCatalog = [];
   const DAN_ANCHORS = [
-    [6.31, "六段"], [8.05, "七段"], [8.50, "八段"], [8.70, "九段"],
-    [10.63, "十段"], [11.22, "玄人"], [11.79, "名人"], [12.51, "超人"], [14.27, "达人"],
+    [0.847, 6.900, "初段"], [1.581, 7.456, "二段"], [2.760, 7.950, "三段"],
+    [3.858, 8.450, "四段"], [4.687, 8.733, "五段"], [5.610, 9.092, "六段"],
+    [7.034, 9.500, "七段"], [7.695, 9.567, "八段"], [8.847, 9.825, "九段"],
+    [10.194, 10.244, "十段"], [10.923, 10.422, "玄人"], [11.984, 10.678, "名人"],
+    [12.903, 10.878, "超人"], [14.535, 11.322, "达人"],
   ];
 
   const CLASSIC_AGGREGATE_REFERENCE = {
@@ -91,9 +94,8 @@
   };
 
   const IMAGE_W = 1440;
-  const IMAGE_H = 1900;
+  const IMAGE_H = 1320;
   const CLASSIC_BEST_COUNT = 20;
-  const URA_BEST_COUNT = 30;
 
   function clamp(value, min, max) {
     return Math.max(min, Math.min(value, max));
@@ -149,11 +151,32 @@
   }
 
   function danLevel(rating) {
-    if (!Number.isFinite(rating) || rating < DAN_ANCHORS[0][0]) return "六段以下";
+    if (!Number.isFinite(rating) || rating < DAN_ANCHORS[0][0]) return "初段以下";
     for (let index = 1; index < DAN_ANCHORS.length; index += 1) {
-      if (rating < DAN_ANCHORS[index][0]) return `${DAN_ANCHORS[index - 1][1]}～${DAN_ANCHORS[index][1]}`;
+      if (rating < DAN_ANCHORS[index][0]) return `${DAN_ANCHORS[index - 1][2]}～${DAN_ANCHORS[index][2]}`;
     }
     return "达人以上";
+  }
+
+  function recommendedConstant(rating) {
+    const value = Number(rating);
+    if (!Number.isFinite(value)) return 0;
+    let left = DAN_ANCHORS[0];
+    let right = DAN_ANCHORS[1];
+    if (value >= DAN_ANCHORS[DAN_ANCHORS.length - 1][0]) {
+      left = DAN_ANCHORS[DAN_ANCHORS.length - 2];
+      right = DAN_ANCHORS[DAN_ANCHORS.length - 1];
+    } else if (value > DAN_ANCHORS[0][0]) {
+      for (let index = 1; index < DAN_ANCHORS.length; index += 1) {
+        if (value <= DAN_ANCHORS[index][0]) {
+          left = DAN_ANCHORS[index - 1];
+          right = DAN_ANCHORS[index];
+          break;
+        }
+      }
+    }
+    const ratio = (value - left[0]) / (right[0] - left[0]);
+    return clamp(left[1] + ratio * (right[1] - left[1]), 1, 11.6);
   }
 
   function calculateClassicAggregate(values, metric) {
@@ -331,22 +354,11 @@
       rows: classicRows,
       b20,
       rating,
+      recommendedConstant: recommendedConstant(rating),
       dimensions,
       tendencies: buildTendencies(dimensions, rating, sampleCounts),
       sampleCounts,
       danLevel: danLevel(rating),
-    };
-  }
-
-  function calculateUraMetrics(rows) {
-    const uraRows = [...rows]
-      .filter((row) => isPassedRow(row) && Number.isFinite(row.single))
-      .sort((a, b) => b.single - a.single || b.highScore - a.highScore);
-    const b30 = uraRows.slice(0, URA_BEST_COUNT);
-    return {
-      rows: uraRows,
-      b30,
-      rating: fixedAverage(b30.map((row) => row.single), URA_BEST_COUNT),
     };
   }
 
@@ -415,6 +427,16 @@
     }[String(level)] ?? String(level || "--");
   }
 
+  function levelColor(level) {
+    return {
+      1: "#e53935",
+      2: "#70ad47",
+      3: "#258bd2",
+      4: "#e83e8c",
+      5: "#7b3fb2",
+    }[String(level)] ?? "#8b949e";
+  }
+
   const SCORE_RANK_LABELS = {
     1: "无评价",
     2: "白粹",
@@ -477,17 +499,17 @@
     ctx.strokeRect(42, 42, IMAGE_W - 84, IMAGE_H - 84);
   }
 
-  function drawHeader(ctx, classic, ura, matchedCount) {
+  function drawHeader(ctx, classic, matchedCount) {
     drawText(ctx, "Taiko Rating", 96, 116, { size: 42, weight: "700", color: "#202225" });
 
     fillRounded(ctx, 96, 210, 470, 142, 8, "#fff7f4", "#e6d7d1");
-    drawText(ctx, "表 Rating", 126, 260, { size: 27, weight: "700", color: "#a23b35" });
+    drawText(ctx, "综合 Rating", 126, 260, { size: 27, weight: "700", color: "#a23b35" });
     drawText(ctx, formatNumber(classic.rating), 520, 292, { size: 58, weight: "700", color: "#a23b35", align: "right", baseline: "middle" });
     drawText(ctx, `历史段位参考：${classic.danLevel}`, 126, 330, { size: 18, color: "#7b7470" });
 
     fillRounded(ctx, 96, 382, 470, 142, 8, "#f2f8fb", "#d0dde4");
-    drawText(ctx, "里 Rating", 126, 432, { size: 27, weight: "700", color: "#246f92" });
-    drawText(ctx, formatNumber(ura.rating), 520, 464, { size: 58, weight: "700", color: "#246f92", align: "right", baseline: "middle" });
+    drawText(ctx, "推荐歌曲定数", 126, 432, { size: 27, weight: "700", color: "#246f92" });
+    drawText(ctx, formatNumber(classic.recommendedConstant), 520, 464, { size: 58, weight: "700", color: "#246f92", align: "right", baseline: "middle" });
 
     fillRounded(ctx, 96, 554, 470, 92, 8, "#ffffff", "#ded8d1");
     drawText(ctx, "匹配谱面", 126, 608, { size: 23, weight: "700", color: "#4d4743" });
@@ -556,35 +578,35 @@
     });
   }
 
-  function drawSection(ctx, title, rows, y, mode) {
+  function drawSection(ctx, title, rows, y) {
     fillRounded(ctx, 78, y, IMAGE_W - 156, 520, 8, "#ffffff", "#ded8d1");
     drawText(ctx, title, 116, y + 54, { size: 30, weight: "700", color: "#2b2826" });
 
     const cardW = 236;
-    const cardH = 54;
+    const cardH = 78;
     const startX = 102;
     const startY = y + 98;
     const gapX = 16;
-    const gapY = 10;
+    const gapY = 12;
     rows.forEach((row, index) => {
       const col = index % 5;
       const line = Math.floor(index / 5);
-      drawSongCard(ctx, row, index, startX + col * (cardW + gapX), startY + line * (cardH + gapY), cardW, cardH, mode);
+      drawSongCard(ctx, row, index, startX + col * (cardW + gapX), startY + line * (cardH + gapY), cardW, cardH);
     });
   }
 
-  function drawSongCard(ctx, row, index, x, y, w, h, mode) {
-    const accent = mode === "classic" ? "#a23b35" : "#246f92";
+  function drawSongCard(ctx, row, index, x, y, w, h) {
+    const accent = levelColor(row.level);
     fillRounded(ctx, x, y, w, h, 6, "#fbfaf8", "#ddd6cf");
     ctx.fillStyle = accent;
     ctx.fillRect(x, y, 5, h);
 
-    const value = mode === "classic" ? row.classicSingle : row.single;
+    const value = row.classicSingle;
     drawText(ctx, String(index + 1).padStart(2, "0"), x + 16, y + 18, { size: 13, weight: "700", color: "#b0a9a4" });
-    drawText(ctx, formatNumber(value), x + 16, y + 41, {
+    drawText(ctx, formatNumber(value), x + 16, y + 51, {
       size: 22,
       weight: "700",
-      color: accent,
+      color: "#a23b35",
       baseline: "middle",
     });
     ctx.strokeStyle = "#e4ddd7";
@@ -593,12 +615,18 @@
     ctx.lineTo(x + 80, y + h - 10);
     ctx.stroke();
 
-    drawFitText(ctx, row.title, x + 94, y + 24, 98, { size: 16, weight: "700", color: "#2b2826" });
-    drawText(ctx, `${levelName(row.level)} ★${row.constant.toFixed(1)}`, x + 94, y + 44, {
+    drawFitText(ctx, row.title, x + 94, y + 22, 98, { size: 16, weight: "700", color: "#2b2826" });
+    drawText(ctx, `${levelName(row.level)}  定数 ${row.constant.toFixed(1)}`, x + 94, y + 44, {
       size: 13,
+      weight: "700",
+      color: accent,
+    });
+    const goodRate = Number(row.goodRate);
+    drawText(ctx, `良率 ${Number.isFinite(goodRate) ? `${(goodRate * 100).toFixed(1)}%` : "--"}`, x + 94, y + 65, {
+      size: 12,
       color: "#7b7470",
     });
-    drawText(ctx, scoreRankLabel(row, row.highScore), x + w - 12, y + 28, {
+    drawText(ctx, scoreRankLabel(row, row.highScore), x + w - 12, y + 48, {
       size: 14,
       weight: "700",
       color: rankPaint(ctx, row, x + w - 82, 64),
@@ -614,21 +642,17 @@
 
     const allRows = payload.allRows || [];
     const classicRows = payload.classicRows || allRows;
-    const uraRows = payload.uraRows || allRows;
     const classic = calculateClassicMetrics(classicRows);
-    const ura = calculateUraMetrics(uraRows);
 
     drawBackground(ctx);
-    drawHeader(ctx, classic, ura, classicRows.length);
+    drawHeader(ctx, classic, classicRows.length);
     drawRadar(ctx, classic.dimensions, classic.tendencies);
-    drawSection(ctx, "表 Rating B20", classic.b20, 730, "classic");
-    drawSection(ctx, "里 Rating B30", ura.b30, 1280, "new");
+    drawSection(ctx, "综合 Rating B20", classic.b20, 730);
 
     return {
       classic,
-      ura,
       rating: classic.rating,
-      uraRating: ura.rating,
+      recommendedConstant: classic.recommendedConstant,
       dimensions: classic.dimensions,
       tendencies: classic.tendencies,
     };
@@ -640,7 +664,6 @@
     },
     calculateClassicSingle,
     calculateClassicMetrics,
-    calculateUraMetrics,
     renderRatingImage,
   };
 })();
