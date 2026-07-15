@@ -1,5 +1,5 @@
 const API_BASE = "https://kinoko.zorua.cn/api/v1";
-const DATA_VERSION = "20260716-balloon-label";
+const DATA_VERSION = "20260716-preview-sizing";
 const FEEDBACK_API_BASE = window.TAIKO_FEEDBACK_API_BASE || "";
 const CHART_PAGE_SIZE = 10;
 const RECOMMEND_COUNT = 20;
@@ -1654,7 +1654,11 @@ function roundedCanvasRect(ctx, x, y, width, height, radius) {
 function drawCanvasNote(ctx, type, x, y, scale = 1, balloonCount = null, normalRadius = 11) {
   const value = String(type);
   const baseRadius = Math.max(2, Number(normalRadius) || 11);
-  const radius = (value === "3" || value === "4" || value === "6" || value === "7" || value === "9" ? baseRadius * 1.36 : baseRadius) * scale;
+  const isLarge = value === "3" || value === "4" || value === "6" || value === "7" || value === "9";
+  // Scroll speed controls position only. The baseline normal-note diameter is set
+  // from an HS 1 sixteenth. A 2px outline adds 1px to either side, so adding 1
+  // after doubling the fill radius makes a large note's visible diameter exactly 2×.
+  const radius = (isLarge ? baseRadius * 2 + 1 : baseRadius) * scale;
   if (value === "1" || value === "3") {
     ctx.beginPath();
     ctx.arc(x, y, radius, 0, Math.PI * 2);
@@ -1752,14 +1756,14 @@ function drawChartPreviewFrame(player) {
     return bpmFactor * scrollFactor;
   };
   const xAt = (item, timeKey = "time") => judgeX + (Number(item?.[timeKey] ?? 0) - current) * baseSpeed * speedFactor(item);
-  const sixteenthRadiusAt = (item) => {
-    const bpm = Number(item?.bpm);
-    const beatBpm = Number.isFinite(bpm) && bpm > 0 ? bpm : player.baseBpm;
-    const sixteenthSeconds = 15 / beatBpm;
-    const spacing = sixteenthSeconds * baseSpeed * speedFactor(item);
-    // The 2px outline adds one visible pixel on both sides: visible note edges then just touch at 16ths.
-    return Math.max(2, spacing / 2 - 1);
-  };
+  // A normal note is sized from a 16th at the reference BPM and HS 1.  The 2px
+  // outline adds one visible pixel on both sides, so adjacent 16ths just touch
+  // at HS 1.  BPM and #SCROLL must not change the note's physical size.
+  const normalNoteRadius = Math.max(2, ((15 / player.baseBpm) * baseSpeed) / 2 - 1);
+  // Extremely high #SCROLL values can turn a very short roll into a full-width
+  // rectangle.  Keep its head moving at the actual speed, but cap only the
+  // continuous body rendered by this compact preview.
+  const maxRollBodyWidth = Math.max(normalNoteRadius * 12, Math.round(width * 0.3));
 
   ctx.clearRect(0, 0, width, height);
   ctx.fillStyle = "#f6f8fb";
@@ -1818,9 +1822,16 @@ function drawChartPreviewFrame(player) {
         scroll: roll.endScroll ?? roll.scroll,
       },
     );
-    const left = Math.max(judgeX - 12, Math.min(x1, x2));
-    const right = Math.min(width - 24, Math.max(x1, x2));
+    let left = Math.max(judgeX - 12, Math.min(x1, x2));
+    let right = Math.min(width - 24, Math.max(x1, x2));
     if (right <= judgeX - 12 || left >= width - 24) continue;
+    if (right - left > maxRollBodyWidth) {
+      // Rolls normally extend toward the later event (rightward).  Retain the
+      // visible leading edge for reversed charts as well, instead of filling the
+      // whole lane when the source uses an extreme scroll multiplier.
+      if (x2 >= x1) right = left + maxRollBodyWidth;
+      else left = right - maxRollBodyWidth;
+    }
     ctx.beginPath();
     roundedCanvasRect(ctx, left, laneY - 12, Math.max(1, right - left), 24, 12);
     ctx.fillStyle = "rgba(240,180,41,0.36)";
@@ -1849,7 +1860,7 @@ function drawChartPreviewFrame(player) {
     const age = current - event.time;
     const scale = age > 0 ? Math.max(0.72, 1 - age * 0.7) : 1;
     ctx.globalAlpha = age > 0 ? Math.max(0.2, 1 - age * 1.8) : 1;
-    drawCanvasNote(ctx, event.type, x, laneY, scale, event.balloonCount, sixteenthRadiusAt(event));
+    drawCanvasNote(ctx, event.type, x, laneY, scale, event.balloonCount, normalNoteRadius);
     ctx.globalAlpha = 1;
   }
 
