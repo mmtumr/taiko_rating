@@ -1,5 +1,5 @@
 const API_BASE = "https://kinoko.zorua.cn/api/v1";
-const DATA_VERSION = "20260715-v3-web-layout";
+const DATA_VERSION = "20260716-chart-player-mobile";
 const FEEDBACK_API_BASE = window.TAIKO_FEEDBACK_API_BASE || "";
 const CHART_PAGE_SIZE = 10;
 const RECOMMEND_COUNT = 20;
@@ -1651,9 +1651,10 @@ function roundedCanvasRect(ctx, x, y, width, height, radius) {
   ctx.arcTo(x, y, x + width, y, r);
 }
 
-function drawCanvasNote(ctx, type, x, y, scale = 1, balloonCount = null) {
+function drawCanvasNote(ctx, type, x, y, scale = 1, balloonCount = null, normalRadius = 11) {
   const value = String(type);
-  const radius = value === "3" || value === "4" || value === "6" || value === "7" || value === "9" ? 15 * scale : 11 * scale;
+  const baseRadius = Math.max(2, Number(normalRadius) || 11);
+  const radius = (value === "3" || value === "4" || value === "6" || value === "7" || value === "9" ? baseRadius * 1.36 : baseRadius) * scale;
   if (value === "1" || value === "3") {
     ctx.beginPath();
     ctx.arc(x, y, radius, 0, Math.PI * 2);
@@ -1718,18 +1719,19 @@ function drawCanvasNote(ctx, type, x, y, scale = 1, balloonCount = null) {
     return;
   }
   if (value === "8") {
+    const diamondRadius = baseRadius * 1.08 * scale;
     ctx.beginPath();
-    ctx.moveTo(x, y - 12 * scale);
-    ctx.lineTo(x + 12 * scale, y);
-    ctx.lineTo(x, y + 12 * scale);
-    ctx.lineTo(x - 12 * scale, y);
+    ctx.moveTo(x, y - diamondRadius);
+    ctx.lineTo(x + diamondRadius, y);
+    ctx.lineTo(x, y + diamondRadius);
+    ctx.lineTo(x - diamondRadius, y);
     ctx.closePath();
     ctx.fillStyle = "#3d4650";
     ctx.fill();
     return;
   }
   ctx.beginPath();
-  ctx.arc(x, y, 8 * scale, 0, Math.PI * 2);
+  ctx.arc(x, y, baseRadius * 0.73 * scale, 0, Math.PI * 2);
   ctx.fillStyle = "#7a8490";
   ctx.fill();
 }
@@ -1749,6 +1751,14 @@ function drawChartPreviewFrame(player) {
     return bpmFactor * scrollFactor;
   };
   const xAt = (item, timeKey = "time") => judgeX + (Number(item?.[timeKey] ?? 0) - current) * baseSpeed * speedFactor(item);
+  const sixteenthRadiusAt = (item) => {
+    const bpm = Number(item?.bpm);
+    const beatBpm = Number.isFinite(bpm) && bpm > 0 ? bpm : player.baseBpm;
+    const sixteenthSeconds = 15 / beatBpm;
+    const spacing = sixteenthSeconds * baseSpeed * speedFactor(item);
+    // The 2px outline adds one visible pixel on both sides: visible note edges then just touch at 16ths.
+    return Math.max(2, spacing / 2 - 1);
+  };
 
   ctx.clearRect(0, 0, width, height);
   ctx.fillStyle = "#f6f8fb";
@@ -1838,7 +1848,7 @@ function drawChartPreviewFrame(player) {
     const age = current - event.time;
     const scale = age > 0 ? Math.max(0.72, 1 - age * 0.7) : 1;
     ctx.globalAlpha = age > 0 ? Math.max(0.2, 1 - age * 1.8) : 1;
-    drawCanvasNote(ctx, event.type, x, laneY, scale, event.balloonCount);
+    drawCanvasNote(ctx, event.type, x, laneY, scale, event.balloonCount, sixteenthRadiusAt(event));
     ctx.globalAlpha = 1;
   }
 
@@ -1937,6 +1947,8 @@ function mountChartPreviewPlayer(chart) {
     lastFrameAt: null,
     baseLeadTime: 2.2,
     baseBpm: 180,
+    logicalWidth: 960,
+    logicalHeight: 260,
     width: 960,
     height: 260,
     cleanup: null,
@@ -1944,16 +1956,17 @@ function mountChartPreviewPlayer(chart) {
 
   const resize = () => {
     const rect = canvas.getBoundingClientRect();
-    const width = Math.max(320, Math.round(rect.width || 960));
-    const height = Math.max(220, Math.round(rect.height || 260));
+    const displayWidth = Math.max(1, rect.width || player.logicalWidth);
+    const displayHeight = Math.max(1, rect.height || player.logicalHeight);
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    if (canvas.width !== Math.round(width * dpr) || canvas.height !== Math.round(height * dpr)) {
-      canvas.width = Math.round(width * dpr);
-      canvas.height = Math.round(height * dpr);
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      player.width = width;
-      player.height = height;
+    if (canvas.width !== Math.round(displayWidth * dpr) || canvas.height !== Math.round(displayHeight * dpr)) {
+      canvas.width = Math.round(displayWidth * dpr);
+      canvas.height = Math.round(displayHeight * dpr);
     }
+    const scale = Math.min(displayWidth / player.logicalWidth, displayHeight / player.logicalHeight);
+    ctx.setTransform(scale * dpr, 0, 0, scale * dpr, 0, 0);
+    player.width = player.logicalWidth;
+    player.height = player.logicalHeight;
     drawChartPreviewFrame(player);
   };
 

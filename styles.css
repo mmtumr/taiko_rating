@@ -942,7 +942,8 @@ body.modal-open {
 .chart-player-canvas {
   display: block;
   width: 100%;
-  height: 260px;
+  height: auto;
+  aspect-ratio: 960 / 260;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #fff;
@@ -1150,10 +1151,6 @@ body.modal-open {
 
   .local-preview-svg {
     min-width: 720px;
-  }
-
-  .chart-player-canvas {
-    height: 230px;
   }
 
   .chart-player-controls {
