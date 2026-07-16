@@ -1,5 +1,5 @@
 const API_BASE = "https://kinoko.zorua.cn/api/v1";
-const DATA_VERSION = "20260716-v4-reading";
+const DATA_VERSION = "20260716-v4-reading-b20";
 const FEEDBACK_API_BASE = window.TAIKO_FEEDBACK_API_BASE || "";
 const CHART_PAGE_SIZE = 10;
 const RECOMMEND_COUNT = 20;
@@ -794,20 +794,21 @@ function renderRatingTable(summary = state.ratingSummary) {
   const rowGap = 12;
   const cardsStartY = sectionY + 84;
 
-  const metricCardSvg = (index, label, value, color) => {
+  const metricCardSvg = (index, label, value, color, subtitle = "") => {
     const y = overviewTop + index * (metricHeight + metricGap);
     return `
       <g>
         <rect x="${margin}" y="${y}" width="${leftWidth}" height="${metricHeight}" rx="14" fill="#fffdfb" stroke="#ddd6cf" stroke-width="2" />
         <rect x="${margin}" y="${y}" width="9" height="${metricHeight}" rx="4" fill="${color}" />
-        <text x="${margin + 36}" y="${y + 56}" font-size="28" font-weight="800" fill="${color}">${escapeHtml(label)}</text>
+        <text x="${margin + 36}" y="${y + 51}" font-size="28" font-weight="800" fill="${color}">${escapeHtml(label)}</text>
+        ${subtitle ? `<text x="${margin + 36}" y="${y + 76}" font-size="16" fill="#66717d">${escapeHtml(subtitle)}</text>` : ""}
         <text x="${margin + leftWidth - 34}" y="${y + metricHeight - 34}" font-size="64" font-weight="800" fill="${color}" text-anchor="end">${escapeHtml(value)}</text>
       </g>
     `;
   };
 
   const topCards = `
-    ${metricCardSvg(0, "综合 Rating / B20", formatRatingValue(summary.classic?.rating), "#a23b35")}
+    ${metricCardSvg(0, "综合 Rating", formatRatingValue(summary.classic?.rating), "#a23b35", "定数 B20")}
     ${metricCardSvg(1, "推荐歌曲定数", formatRatingValue(summary.recommendedConstant), "#246f92")}
     ${metricCardSvg(2, "谱面匹配", String(summary.matchedCount ?? 0), "#4d4743")}
   `;

@@ -38,8 +38,9 @@ simultaneous mixed-speed notes. The catalog covers
 all Oni/Edit/Hard charts plus generated Normal reference charts
 `DARK EX MACHINA♡` and `幽玄之乱`; the Easy/Normal rows for these two songs
 remain excluded from Rating while their Hard and higher rows are included.
-Sakura v2 is retained only as a compatibility fallback. Each player ability is a
-weighted Best 15, with weights `1.0 / 0.8 / 0.6` for each group of five.
+Sakura v2 is retained only as a compatibility fallback. Each player ability is
+an independent simple-average B20: the top twenty single-chart values for that
+specific axis are averaged without additional decay weights.
 
 The radar polygon is a relative profile centered at 50. Its baseline is the
 median and MAD of v4 charts within `main constant +/- 0.5`; it is an ability

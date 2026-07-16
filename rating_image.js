@@ -73,7 +73,7 @@
     { key: "rhythm", label: "节奏" },
     { key: "complex", label: "复合" },
   ];
-  const ABILITY_BEST_COUNT = 15;
+  const RATING_BEST_COUNT = 20;
   let abilityCatalog = [];
   const DAN_ANCHORS = [
     [0.847, 6.900, "初段"], [1.581, 7.456, "二段"], [2.760, 7.950, "三段"],
@@ -112,16 +112,8 @@
     return fixedAverage(top, top.length);
   }
 
-  function weightedAbility(values) {
-    const ranked = [...values].filter(Number.isFinite).sort((a, b) => b - a).slice(0, ABILITY_BEST_COUNT);
-    let total = 0;
-    let weightTotal = 0;
-    ranked.forEach((value, index) => {
-      const weight = index < 5 ? 1 : index < 10 ? 0.8 : 0.6;
-      total += value * weight;
-      weightTotal += weight;
-    });
-    return weightTotal ? total / weightTotal : 0;
+  function dimensionB20(values) {
+    return averageTop(values, CLASSIC_BEST_COUNT);
   }
 
   function median(values) {
@@ -158,7 +150,7 @@
     return "达人以上";
   }
 
-  function recommendedConstant(rating) {
+  function legacyRecommendedConstant(rating) {
     const value = Number(rating);
     if (!Number.isFinite(value)) return 0;
     let left = DAN_ANCHORS[0];
@@ -177,6 +169,19 @@
     }
     const ratio = (value - left[0]) / (right[0] - left[0]);
     return clamp(left[1] + ratio * (right[1] - left[1]), 1, 11.6);
+  }
+
+  function newRatingRecommendedConstant(newRating) {
+    const value = Number(newRating);
+    return Number.isFinite(value) ? clamp(value, 1, 11.6) : 0;
+  }
+
+  function recommendedConstant(classicRating, newRating) {
+    const legacy = legacyRecommendedConstant(classicRating);
+    if (!Number.isFinite(Number(newRating))) return legacy;
+    const fromNewRating = newRatingRecommendedConstant(newRating);
+    const fifthDanRating = DAN_ANCHORS[4][0];
+    return Number(classicRating) < fifthDanRating ? fromNewRating : Math.min(fromNewRating, legacy);
   }
 
   function calculateClassicAggregate(values, metric) {
@@ -331,6 +336,11 @@
   }
 
   function calculateClassicMetrics(rows) {
+    const newRatingRows = rows
+      .filter(isPassedRow)
+      .sort((a, b) => Number(b.single || 0) - Number(a.single || 0));
+    const newRatingB20 = newRatingRows.slice(0, RATING_BEST_COUNT);
+    const newRating = fixedAverage(newRatingB20.map((row) => Number(row.single)), RATING_BEST_COUNT);
     const classicRows = rows
       .map(calculateClassicSingle)
       .filter(Boolean)
@@ -338,16 +348,18 @@
     const b20 = classicRows.slice(0, CLASSIC_BEST_COUNT);
     const rating = averageTop(b20.map((row) => row.classicSingle));
     const dimensions = Object.fromEntries(
-      DIMENSIONS.map((dim) => [dim.key, weightedAbility(classicRows.map((row) => row.dimensions[dim.key]))]),
+      DIMENSIONS.map((dim) => [dim.key, dimensionB20(classicRows.map((row) => row.dimensions[dim.key]))]),
     );
     const sampleCounts = Object.fromEntries(
-      DIMENSIONS.map((dim) => [dim.key, Math.min(classicRows.filter((row) => Number.isFinite(row.dimensions[dim.key])).length, ABILITY_BEST_COUNT)]),
+      DIMENSIONS.map((dim) => [dim.key, Math.min(classicRows.filter((row) => Number.isFinite(row.dimensions[dim.key])).length, CLASSIC_BEST_COUNT)]),
     );
     return {
       rows: classicRows,
       b20,
+      newRatingB20,
+      newRating,
       rating,
-      recommendedConstant: recommendedConstant(rating),
+      recommendedConstant: recommendedConstant(rating, newRating),
       dimensions,
       tendencies: buildTendencies(dimensions, rating, sampleCounts),
       sampleCounts,
@@ -488,14 +500,15 @@
     fillRounded(ctx, 35, 35, IMAGE_W - 70, IMAGE_H - 70, 30, "#ffffff", "#ded8d1", 3);
   }
 
-  function drawMetricCard(ctx, box, label, value, color, digits = 2) {
+  function drawMetricCard(ctx, box, label, value, color, digits = 2, subtitle = "") {
     const [left, top, right, bottom] = box;
     fillRounded(ctx, left, top, right - left, bottom - top, 18, "#fffdfb", "#ded8d1", 2);
     fillRounded(ctx, left, top, 8, bottom - top, 4, color);
-    drawText(ctx, label, left + 34, top + 54, { size: 25, weight: "700", color });
+    drawText(ctx, label, left + 34, top + 42, { size: 24, weight: "700", color });
+    if (subtitle) drawText(ctx, subtitle, left + 34, top + 68, { size: 16, color: "#6b7280" });
     const text = Number(value).toFixed(digits);
-    drawText(ctx, text, right - 30, bottom - 45, {
-      size: 60,
+    drawText(ctx, text, right - 30, bottom - 35, {
+      size: 52,
       weight: "700",
       color,
       align: "right",
@@ -510,7 +523,7 @@
       color: "#6b7280",
       align: "right",
     });
-    drawMetricCard(ctx, [85, 205, 570, 385], "综合 Rating / B20", classic.rating, "#a23b35");
+    drawMetricCard(ctx, [85, 205, 570, 385], "综合 Rating", classic.rating, "#a23b35", 2, "定数 B20");
     drawMetricCard(ctx, [85, 410, 570, 590], "推荐歌曲定数", classic.recommendedConstant, "#246f92");
     drawMetricCard(ctx, [85, 615, 570, 795], "谱面匹配", matchedCount, "#4d4743", 0);
   }
