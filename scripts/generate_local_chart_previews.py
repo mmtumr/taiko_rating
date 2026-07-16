@@ -28,6 +28,7 @@ COURSE_ALIASES = {
 
 NOTE_RE = re.compile(r"[0-9]")
 COMMAND_RE = re.compile(r"^#([A-Z]+)(?:\s+(.+))?$", re.I)
+HEADER_VALUE_RE = re.compile(r"^([A-Z_]+)\s*:\s*(.*)$", re.I)
 
 
 def read_json(path: Path, default: Any) -> Any:
@@ -44,6 +45,34 @@ def read_tja(path: Path) -> str:
         except UnicodeDecodeError:
             continue
     return raw.decode("utf-8", "replace")
+
+
+def extract_audio_metadata(text: str, tja_path: Path) -> dict[str, Any] | None:
+    """Return the local audio asset referenced by a TJA header, when it exists."""
+    values: dict[str, str] = {}
+    for raw_line in text.splitlines():
+        line = strip_comment(raw_line)
+        if line.upper().startswith("#START"):
+            break
+        match = HEADER_VALUE_RE.match(line)
+        if match:
+            values[match.group(1).upper()] = match.group(2).strip()
+
+    wave = values.get("WAVE", "")
+    if not wave:
+        return None
+    audio_path = (tja_path.parent / wave).resolve()
+    if not audio_path.is_file():
+        return None
+    try:
+        relative_path = audio_path.relative_to(TAIKO_ROOT).as_posix()
+    except ValueError:
+        return None
+    return {
+        "path": relative_path,
+        "offset": round4(safe_float(values.get("OFFSET", "0"), 0.0)),
+        "format": audio_path.suffix.removeprefix(".").casefold(),
+    }
 
 
 def clean_course(value: Any) -> str:
@@ -339,7 +368,8 @@ def build_preview(chart: dict[str, Any], max_measures: int) -> tuple[dict[str, A
         return None, f"missing file: {path_text}"
 
     try:
-        blocks = course_blocks(read_tja(tja_path))
+        text = read_tja(tja_path)
+        blocks = course_blocks(text)
     except OSError as exc:
         return None, f"{type(exc).__name__}: {exc}"
 
@@ -382,6 +412,7 @@ def build_preview(chart: dict[str, Any], max_measures: int) -> tuple[dict[str, A
         preview_data.pop("measure_timings", None)
         preview_data.pop("segment_timings", None)
 
+    audio = extract_audio_metadata(text, tja_path)
     return {
         "source": "local_tja",
         "course": course,
@@ -389,6 +420,7 @@ def build_preview(chart: dict[str, Any], max_measures: int) -> tuple[dict[str, A
         "shown_measure_count": len(measures),
         "is_clipped": clipped,
         "timing_version": 2,
+        **({"audio": audio} if audio else {}),
         **preview_data,
     }, None
 

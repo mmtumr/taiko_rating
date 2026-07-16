@@ -523,7 +523,15 @@
       color: "#6b7280",
       align: "right",
     });
-    drawMetricCard(ctx, [85, 205, 570, 385], "综合 Rating", classic.rating, "#a23b35", 2, "定数 B20");
+    drawMetricCard(
+      ctx,
+      [85, 205, 570, 385],
+      "综合 Rating",
+      classic.rating,
+      "#a23b35",
+      2,
+      `谱面定数 B20 ${formatLoose(classic.newRating)}`,
+    );
     drawMetricCard(ctx, [85, 410, 570, 590], "推荐歌曲定数", classic.recommendedConstant, "#246f92");
     drawMetricCard(ctx, [85, 615, 570, 795], "谱面匹配", matchedCount, "#4d4743", 0);
   }

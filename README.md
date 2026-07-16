@@ -9,6 +9,7 @@ This is a static browser app for:
 - calculating a CHUNITHM-like Taiko Rating
 - rendering chart previews generated from local ESE/TJA files
 - rendering and exporting a share image
+- opening a shareable, per-song preview page with all available difficulties
 
 The user-facing score is the classic comprehensive B20 Rating. A monotonic
 piecewise curve calibrated from historical red-pass Dan requirements converts
@@ -27,6 +28,35 @@ Then open `http://127.0.0.1:8765/`.
 GitHub Pages can serve this repo directly as a static site. In the repository
 settings, enable Pages with source `Deploy from a branch`, branch `main`, folder
 `/ (root)`.
+
+## Shareable song preview pages and music
+
+Every locally parsed song has a shareable page in this form:
+
+```text
+https://taiko.mmt.qd.je/fumen.html?song=<title_normalized>
+```
+
+The page lists the song's available difficulties, plays the event-accurate TJA
+visual chart, and keeps the chart synchronized with an HTML audio element when
+an audio host is configured. The Bot's `/查歌` result sends this page after its
+image reply.
+
+Audio files deliberately stay out of this GitHub Pages repository: the local
+ESE collection is about 10 GiB. `scripts/generate_local_chart_previews.py`
+records the source-relative audio path and TJA `OFFSET` for every preview in
+`data/local_chart_previews.json`. After uploading that directory tree to a
+CORS-enabled public object-storage/CDN origin, set its root URL in
+`data/audio_config.json`, for example:
+
+```json
+{"base_url":"https://audio.example.com/"}
+```
+
+The public origin must retain the `ESE-master/ese/...` relative paths from the
+manifest and return audio responses with a permissive CORS header. Before that
+configuration is supplied, the same pages remain usable as visual-only chart
+players and state that music is awaiting deployment.
 
 ## V4 ability profile
 

@@ -1,0 +1,1 @@
+{"version":1,"base_url":"","description":"Set base_url to the public root that mirrors the ESE-master/ese audio paths. The preview page stays visual-only until a CORS-enabled audio host is configured."}

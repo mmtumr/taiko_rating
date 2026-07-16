@@ -484,6 +484,11 @@ function getLocalPreview(chart) {
   return state.localPreviews.get(chart?.id) || null;
 }
 
+function songPreviewHref(chart) {
+  const songKey = String(chart?.title_normalized || normalizeTitle(chart?.title || chart?.display_title || ""));
+  return songKey ? `fumen.html?song=${encodeURIComponent(songKey)}` : "";
+}
+
 function findChartById(id) {
   return state.chartData.find((chart) => chart.id === id) || null;
 }
@@ -827,7 +832,13 @@ function renderRatingTable(summary = state.ratingSummary) {
   };
 
   const topCards = `
-    ${metricCardSvg(0, "综合 Rating", formatRatingValue(summary.classic?.rating), "#a23b35", "定数 B20")}
+    ${metricCardSvg(
+      0,
+      "综合 Rating",
+      formatRatingValue(summary.classic?.rating),
+      "#a23b35",
+      `谱面定数 B20 ${formatRatingValue(summary.classic?.newRating)}`,
+    )}
     ${metricCardSvg(1, "推荐歌曲定数", formatRatingValue(summary.recommendedConstant), "#246f92")}
     ${metricCardSvg(2, "谱面匹配", String(summary.matchedCount ?? 0), "#4d4743")}
   `;
@@ -2215,7 +2226,10 @@ function renderChartModalBody(chart) {
   return `
     <div ${feedbackEnabled ? `data-feedback-root-id="${escapeHtml(chart.id)}"` : ""}>
       <section class="modal-section">
-        <h3>谱面预览</h3>
+        <div class="panel-head chart-preview-page-head">
+          <h3>谱面预览</h3>
+          ${localPreview && songPreviewHref(chart) ? `<a class="button-link" href="${songPreviewHref(chart)}">在独立页面播放</a>` : ""}
+        </div>
         ${renderPreviewImages(chart)}
       </section>
       <section class="modal-section chart-ability-section">

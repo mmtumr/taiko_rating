@@ -1277,3 +1277,303 @@ body.modal-open {
     grid-template-columns: 1fr;
   }
 }
+
+/* Dedicated song preview pages, addressed as fumen.html?song=<stable-song-key>. */
+.fumen-page {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 10% 0%, rgba(162, 59, 53, 0.12), transparent 34rem),
+    linear-gradient(150deg, #f6f4f1 0%, #eef2f6 58%, #f5f1ed 100%);
+}
+
+.fumen-shell {
+  width: min(1180px, calc(100% - 40px));
+  margin: 0 auto;
+  padding: 22px 0 44px;
+}
+
+.fumen-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 22px;
+}
+
+.fumen-brand {
+  display: grid;
+  gap: 2px;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.fumen-brand span {
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.11em;
+}
+
+.fumen-brand strong {
+  font-size: 23px;
+}
+
+.fumen-home-link {
+  background: #fff;
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+
+.fumen-loading,
+.fumen-error {
+  display: grid;
+  gap: 16px;
+  justify-items: start;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 24px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: var(--shadow);
+}
+
+.fumen-error {
+  color: #8f1f24;
+  white-space: pre-line;
+}
+
+.fumen-hero,
+.fumen-player-card,
+.fumen-info-grid article {
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: var(--shadow);
+}
+
+.fumen-hero {
+  padding: 28px clamp(20px, 4vw, 42px);
+  overflow: hidden;
+  position: relative;
+}
+
+.fumen-hero::after {
+  content: "";
+  position: absolute;
+  width: 240px;
+  height: 240px;
+  right: -105px;
+  top: -130px;
+  border-radius: 50%;
+  border: 28px solid rgba(162, 59, 53, 0.1);
+}
+
+.fumen-kicker {
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.fumen-hero h1 {
+  max-width: 900px;
+  margin-top: 8px;
+  font-size: clamp(28px, 5vw, 46px);
+  line-height: 1.18;
+  overflow-wrap: anywhere;
+}
+
+.fumen-hero > p:not(.fumen-kicker) {
+  margin-top: 10px;
+  color: var(--muted);
+}
+
+.fumen-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.fumen-meta span,
+.fumen-source-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 29px;
+  border: 1px solid #d9dee5;
+  border-radius: 999px;
+  padding: 3px 11px;
+  color: #4b5563;
+  background: #f8fafc;
+  font-size: 13px;
+}
+
+.fumen-meta strong {
+  margin-left: 4px;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.fumen-difficulties {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 18px 0;
+}
+
+.fumen-difficulty {
+  min-width: 96px;
+  min-height: 64px;
+  padding: 8px 14px;
+  border: 1px solid color-mix(in srgb, var(--difficulty-color) 36%, #cbd5e1);
+  border-left: 6px solid var(--difficulty-color);
+  color: #374151;
+  background: rgba(255, 255, 255, 0.85);
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.fumen-difficulty span {
+  font-weight: 700;
+}
+
+.fumen-difficulty strong {
+  color: var(--difficulty-color);
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+}
+
+.fumen-difficulty.is-active {
+  border-color: var(--difficulty-color);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--difficulty-color) 17%, transparent);
+}
+
+.fumen-player-card {
+  padding: 18px;
+}
+
+.fumen-player-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  margin: 2px 4px 14px;
+}
+
+.fumen-player-head h2,
+.fumen-info-grid h2 {
+  font-size: 19px;
+}
+
+.fumen-player-head p,
+.fumen-info-grid p {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.fumen-chart-player {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+  background: #f7f8fa;
+}
+
+.fumen-chart-player .chart-player-canvas {
+  aspect-ratio: 960 / 260;
+  height: auto;
+}
+
+.fumen-player-controls {
+  margin: 0;
+  padding: 0;
+}
+
+.fumen-audio {
+  display: block;
+  width: 100%;
+  height: 40px;
+}
+
+.fumen-info-grid {
+  display: grid;
+  grid-template-columns: minmax(300px, 0.9fr) minmax(360px, 1.1fr);
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.fumen-info-grid article {
+  padding: 20px;
+}
+
+.fumen-abilities {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.fumen-abilities div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px 7px;
+  border-radius: 10px;
+  color: var(--muted);
+  background: #f7f8fa;
+  text-align: center;
+}
+
+.fumen-abilities span {
+  font-size: 12px;
+}
+
+.fumen-abilities strong {
+  color: var(--ink);
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 760px) {
+  .fumen-shell {
+    width: min(100% - 24px, 1180px);
+    padding-top: 12px;
+  }
+
+  .fumen-topbar {
+    margin-bottom: 14px;
+  }
+
+  .fumen-player-card {
+    padding: 10px;
+  }
+
+  .fumen-player-head {
+    display: grid;
+    gap: 9px;
+    margin: 4px 2px 12px;
+  }
+
+  .fumen-source-badge {
+    justify-self: start;
+  }
+
+  .fumen-player-controls {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .fumen-player-controls input[type="range"],
+  .fumen-player-controls .chart-player-time {
+    grid-column: 1 / -1;
+  }
+
+  .fumen-info-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .fumen-abilities {
+    grid-template-columns: repeat(5, minmax(54px, 1fr));
+    overflow-x: auto;
+  }
+}
