@@ -1,15 +1,16 @@
 {
   "chart_rows": 6781,
-  "selected": 5920,
-  "already_present": 4254,
-  "generated": 1666,
-  "covered": 5920,
+  "selected": 6781,
+  "already_present": 4811,
+  "generated": 1970,
+  "covered": 6781,
   "coverage": 1.0,
   "by_course": {
     "Edit": 371,
     "Oni": 2725,
     "Hard": 2822,
-    "Normal": 2
+    "Normal": 484,
+    "Easy": 379
   },
   "forced_normal": [
     {
@@ -34,6 +35,6 @@
   ],
   "model": "encoder_custom_abilities_v4_reading_density",
   "device": "cuda",
-  "elapsed_seconds": 467.57,
+  "elapsed_seconds": 483.64,
   "errors": []
 }

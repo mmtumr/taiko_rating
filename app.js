@@ -1,5 +1,5 @@
 const API_BASE = "https://kinoko.zorua.cn/api/v1";
-const DATA_VERSION = "20260716-v4-reading-b20";
+const DATA_VERSION = "20260716-v5-complex-frame-ms";
 const FEEDBACK_API_BASE = window.TAIKO_FEEDBACK_API_BASE || "";
 const CHART_PAGE_SIZE = 10;
 const RECOMMEND_COUNT = 20;
@@ -11,6 +11,14 @@ const RADAR_DIMS = [
   { key: "accuracy", label: "精度" },
   { key: "rhythm", label: "节奏" },
   { key: "complex", label: "复合" },
+];
+
+const CHART_ABILITY_DIMS = [
+  { key: "stamina", label: "体力", hint: "持续处理与耐力", feedback: "ability_stamina" },
+  { key: "reading", label: "读谱", hint: "流速、变速与同屏读谱", feedback: "ability_reading" },
+  { key: "burst", label: "爆发", hint: "短时高密度处理", feedback: "ability_burst" },
+  { key: "rhythm", label: "节奏", hint: "节拍、切分与节奏变化", feedback: "ability_rhythm" },
+  { key: "complex", label: "复合", hint: "手顺、换手与复合处理", feedback: "ability_complex" },
 ];
 
 const FIELD_DEFS = [
@@ -41,6 +49,11 @@ const FEEDBACK_FIELDS = [
   { key: "bpm_change", label: "BPM变化", path: "features.bpm_change" },
   { key: "hs_change", label: "HS变化", path: "features.hs_change" },
   { key: "rhythm", label: "节奏处理", path: "features.rhythm" },
+  { key: "ability_stamina", label: "谱面体力", path: "v4.stamina" },
+  { key: "ability_reading", label: "谱面读谱", path: "v4.reading" },
+  { key: "ability_burst", label: "谱面爆发", path: "v4.burst" },
+  { key: "ability_rhythm", label: "谱面节奏", path: "v4.rhythm" },
+  { key: "ability_complex", label: "谱面复合", path: "v4.complex" },
 ];
 
 const FILTER_OPS = [
@@ -196,6 +209,15 @@ function sourcePriority(source) {
 
 function isEstimatedSource(chart) {
   return chart.source === "encoder" || chart.source === "encoder_pending" || chart.needs_encoder;
+}
+
+function chartAbility(chart) {
+  return chart?.v4 || {};
+}
+
+function hasChartAbility(chart) {
+  const ability = chartAbility(chart);
+  return CHART_ABILITY_DIMS.every((dim) => Number.isFinite(Number(ability[dim.key])));
 }
 
 function scoreBonus(score) {
@@ -397,7 +419,7 @@ function applyFeedbackSummary(chart, payload) {
 }
 
 async function loadFeedbackSummary(chart) {
-  if (!FEEDBACK_API_BASE || !isEstimatedSource(chart)) return;
+  if (!FEEDBACK_API_BASE || !(isEstimatedSource(chart) || hasChartAbility(chart))) return;
   const root = els.chartModalBody.querySelector(`[data-feedback-root-id="${CSS.escape(chart.id)}"]`);
   try {
     const url = new URL(`${FEEDBACK_API_BASE.replace(/\/$/, "")}/summary`);
@@ -478,7 +500,7 @@ function indexChartData(charts) {
       const: Number(chart.const),
       combo: chart.combo,
       features: chart.features || {},
-      ability: chart.v4 || chart.v3 || null,
+      ability: chart.v4 || null,
       source: chart.source,
       needs_encoder: Boolean(chart.needs_encoder),
       raw: chart,
@@ -529,17 +551,14 @@ async function loadLocalPreviews() {
 
 async function loadChartData() {
   try {
-    const [resp, v2Resp] = await Promise.all([
-      fetch(`data/chart_data.json?v=${DATA_VERSION}`, { cache: "no-store" }),
-      fetch(`data/v2_constants.json?v=${DATA_VERSION}`, { cache: "no-store" }),
-    ]);
-    if (!resp.ok || !v2Resp.ok) throw new Error(`HTTP ${resp.status}/${v2Resp.status}`);
-    const [charts, v2Rows] = await Promise.all([resp.json(), v2Resp.json()]);
-    state.v2Constants = new Map((Array.isArray(v2Rows) ? v2Rows : []).map((row) => [chartKey(row.id, row.level), row]));
+    const resp = await fetch(`data/chart_data.json?v=${DATA_VERSION}`, { cache: "no-store" });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const charts = await resp.json();
+    state.v2Constants = new Map();
     const embeddedV4 = (Array.isArray(charts) ? charts : [])
-      .map((chart) => chart?.v4 || chart?.v3)
+      .map((chart) => chart?.v4)
       .filter((ability) => ability && Number.isFinite(Number(ability.main)));
-    window.TaikoRatingImage?.setAbilityCatalog?.(embeddedV4.length ? embeddedV4 : (Array.isArray(v2Rows) ? v2Rows : []));
+    window.TaikoRatingImage?.setAbilityCatalog?.(embeddedV4);
     state.chartData = Array.isArray(charts) ? charts : [];
     await loadLocalPreviews();
     indexChartData(state.chartData);
@@ -1196,7 +1215,7 @@ function chartFeatureNumber(chart, key) {
 }
 
 function chartTrainingProfile(chart) {
-  const ability = chart?.v4 || chart?.v3 || {};
+  const ability = chart?.v4 || {};
   const complex = chartFeatureNumber(chart, "complex");
   const avgDensity = chartFeatureNumber(chart, "avg_density");
   const peakDensity = chartFeatureNumber(chart, "peak_density");
@@ -1322,7 +1341,7 @@ function recommendationBandClass(band) {
 }
 
 function recommendationFeatureText(chart) {
-  const ability = chart.v4 || chart.v3 || {};
+  const ability = chart.v4 || {};
   if (["stamina", "reading", "burst", "rhythm", "complex"].every((key) => Number.isFinite(Number(ability[key])))) {
     return `体 ${formatLoose(ability.stamina)} / 读 ${formatLoose(ability.reading)} / 爆 ${formatLoose(ability.burst)} · 节奏 ${formatLoose(ability.rhythm)} · 复合 ${formatLoose(ability.complex)}`;
   }
@@ -2149,7 +2168,22 @@ function renderChartModalBody(chart) {
   const f = chart.features || {};
   const localPreview = getLocalPreview(chart);
   const timing = localPreview?.timing_summary || {};
-  const feedbackEnabled = isEstimatedSource(chart);
+  const metricFeedbackEnabled = isEstimatedSource(chart);
+  const abilityFeedbackEnabled = hasChartAbility(chart);
+  const feedbackEnabled = metricFeedbackEnabled || abilityFeedbackEnabled;
+  const ability = chartAbility(chart);
+  const abilityCards = abilityFeedbackEnabled
+    ? CHART_ABILITY_DIMS.map((dim) => {
+      const value = Number(ability[dim.key]);
+      return `
+        <article class="chart-ability-card feedback-detail-item" data-feedback-field="${escapeHtml(dim.feedback)}">
+          <div class="chart-ability-label"><span>${escapeHtml(dim.label)}</span><small>${escapeHtml(dim.hint)}</small></div>
+          <strong>${escapeHtml(value.toFixed(2))}</strong>
+          ${feedbackControlHtml(chart, dim.feedback)}
+        </article>
+      `;
+    }).join("")
+    : '<div class="muted-box">该谱面暂缺五专项能力数据。</div>';
   const items = [
     { label: "曲名", value: chartTitle(chart) },
     { label: "原曲名", value: chart.title },
@@ -2179,28 +2213,36 @@ function renderChartModalBody(chart) {
     { label: "网站", value: chart.fumen?.url || "--" },
   ];
   return `
-    <section class="modal-section">
-      <h3>谱面预览</h3>
-      ${renderPreviewImages(chart)}
-    </section>
-    <section class="modal-section" ${feedbackEnabled ? `data-feedback-root-id="${escapeHtml(chart.id)}"` : ""}>
-      <div class="feedback-head">
-        <h3>数值</h3>
-        ${feedbackEnabled ? `<span data-feedback-status>${FEEDBACK_API_BASE ? "读取反馈中" : "反馈服务尚未配置"}</span>` : ""}
-      </div>
-      <div class="detail-grid">${items
-        .map((item) => {
-          const canFeedback = feedbackEnabled && item.feedback;
-          return `
-            <div class="detail-item ${canFeedback ? "feedback-detail-item" : ""}" ${canFeedback ? `data-feedback-field="${escapeHtml(item.feedback)}"` : ""}>
-              <span>${escapeHtml(item.label)}</span>
-              <strong>${escapeHtml(item.value)}</strong>
-              ${canFeedback ? feedbackControlHtml(chart, item.feedback) : ""}
-            </div>
-          `;
-        })
-        .join("")}</div>
-    </section>
+    <div ${feedbackEnabled ? `data-feedback-root-id="${escapeHtml(chart.id)}"` : ""}>
+      <section class="modal-section">
+        <h3>谱面预览</h3>
+        ${renderPreviewImages(chart)}
+      </section>
+      <section class="modal-section chart-ability-section">
+        <div class="rating-detail-section-head">
+          <div><h3>谱面五维</h3><p>体力、读谱、爆发、节奏与复合的 V4 物理能力估计；可分别投票偏高或偏低。</p></div>
+        </div>
+        <div class="chart-ability-grid">${abilityCards}</div>
+      </section>
+      <section class="modal-section">
+        <div class="feedback-head">
+          <h3>数值</h3>
+          ${feedbackEnabled ? `<span data-feedback-status>${FEEDBACK_API_BASE ? "读取反馈中" : "反馈服务尚未配置"}</span>` : ""}
+        </div>
+        <div class="detail-grid">${items
+          .map((item) => {
+            const canFeedback = metricFeedbackEnabled && item.feedback;
+            return `
+              <div class="detail-item ${canFeedback ? "feedback-detail-item" : ""}" ${canFeedback ? `data-feedback-field="${escapeHtml(item.feedback)}"` : ""}>
+                <span>${escapeHtml(item.label)}</span>
+                <strong>${escapeHtml(item.value)}</strong>
+                ${canFeedback ? feedbackControlHtml(chart, item.feedback) : ""}
+              </div>
+            `;
+          })
+          .join("")}</div>
+      </section>
+    </div>
   `;
 }
 

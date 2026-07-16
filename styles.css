@@ -640,6 +640,51 @@ tbody tr.clickable-row.is-selected td {
   line-height: 1.45;
 }
 
+.chart-ability-section {
+  border-top: 1px solid var(--line);
+  padding-top: 18px;
+}
+
+.chart-ability-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.chart-ability-card {
+  display: grid;
+  gap: 10px;
+  min-height: 188px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 14px;
+  background: #fff;
+}
+
+.chart-ability-label {
+  display: grid;
+  gap: 4px;
+}
+
+.chart-ability-label span {
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 750;
+}
+
+.chart-ability-label small {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.chart-ability-card > strong {
+  color: #a23b35;
+  font-size: 29px;
+  line-height: 1;
+  letter-spacing: -0.03em;
+}
+
 .muted-box {
   border: 1px dashed var(--line-strong);
   border-radius: 8px;
@@ -1062,6 +1107,10 @@ body.modal-open {
   .rating-detail-ability-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
+
+  .chart-ability-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 760px) {
@@ -1099,6 +1148,10 @@ body.modal-open {
 
   .rating-detail-kpis,
   .rating-detail-ability-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .chart-ability-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 

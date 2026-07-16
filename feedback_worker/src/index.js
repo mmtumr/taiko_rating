@@ -16,6 +16,11 @@ const ALLOWED_FIELDS = new Set([
   "bpm_change",
   "hs_change",
   "rhythm",
+  "ability_stamina",
+  "ability_reading",
+  "ability_burst",
+  "ability_rhythm",
+  "ability_complex",
 ]);
 
 const ALLOWED_VOTES = new Set(["too_high", "too_low"]);

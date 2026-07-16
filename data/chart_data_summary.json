@@ -15,11 +15,12 @@
   },
   "needs_encoder": 861,
   "v4_reading_abilities": {
-    "covered": 5920,
+    "covered": 6781,
     "by_course": {
+      "Easy": 379,
       "Edit": 371,
       "Hard": 2822,
-      "Normal": 2,
+      "Normal": 484,
       "Oni": 2725
     }
   },
