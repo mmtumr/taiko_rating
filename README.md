@@ -28,11 +28,13 @@ GitHub Pages can serve this repo directly as a static site. In the repository
 settings, enable Pages with source `Deploy from a branch`, branch `main`, folder
 `/ (root)`.
 
-## V3 ability profile
+## V4 ability profile
 
 The comprehensive Rating remains the absolute strength indicator. The six numeric
-abilities use the local v3 encoder catalog embedded in `chart_data.json`:
-stamina, hand speed, burst, accuracy, rhythm, and complex. The catalog covers
+abilities use the local v4 encoder catalog embedded in `chart_data.json`:
+stamina, reading, burst, accuracy, rhythm, and complex. Reading models native
+BPM/#SCROLL visual flow, screen information load, abrupt speed changes, and
+simultaneous mixed-speed notes. The catalog covers
 all Oni/Edit/Hard charts plus generated Normal reference charts
 `DARK EX MACHINA♡` and `幽玄之乱`; the Easy/Normal rows for these two songs
 remain excluded from Rating while their Hard and higher rows are included.
@@ -40,16 +42,16 @@ Sakura v2 is retained only as a compatibility fallback. Each player ability is a
 weighted Best 15, with weights `1.0 / 0.8 / 0.6` for each group of five.
 
 The radar polygon is a relative profile centered at 50. Its baseline is the
-median and MAD of v3 charts within `main constant +/- 0.5`; it is an ability
+median and MAD of v4 charts within `main constant +/- 0.5`; it is an ability
 tendency, not a player percentile. Lower difficulties retain a feature-based
 fallback. Historical Nijiiro 2020-2024 dojo medians provide the displayed Dan
 reference.
 
-The v3 catalog is generated in the sibling encoder project and then embedded
+The v4 catalog is generated in the sibling encoder project and then embedded
 when chart data is rebuilt:
 
 ```bash
-python ../encoder/scripts/generate_v3_full_catalog.py --overwrite
+python ../encoder/scripts/generate_v3_full_catalog.py --checkpoint ../encoder/checkpoints/encoder_custom_abilities_v4_reading_density/best.pt --output data/v4_reading_abilities.json --model-name encoder_custom_abilities_v4_reading_density --overwrite
 python scripts/build_chart_data.py
 ```
 

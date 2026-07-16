@@ -538,7 +538,7 @@ def build_chart_data(
     encoder_stats_by_id: dict[str, Any],
     bpm_by_path: dict[str, float | None],
     alias_index: dict[str, list[str]],
-    v3_abilities_by_id: dict[str, Any] | None = None,
+    v4_abilities_by_id: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     records: list[dict[str, Any]] = []
     seen: set[tuple[str, str]] = set()
@@ -555,11 +555,11 @@ def build_chart_data(
         seen.add(key)
         excel_row = excel_by_course.get(key)
         record = make_record(row, excel_row, fumen_stats_by_id, encoder_stats_by_id, bpm_by_path, alias_index)
-        ability = (v3_abilities_by_id or {}).get(str(record.get("id")))
+        ability = (v4_abilities_by_id or {}).get(str(record.get("id")))
         if isinstance(ability, dict):
-            record["v3"] = {
+            record["v4"] = {
                 key: round(float(ability[key]), 4)
-                for key in ("main", "stamina", "handspeed", "burst", "complex", "rhythm")
+                for key in ("main", "stamina", "reading", "burst", "complex", "rhythm")
                 if ability.get(key) is not None
             }
         records.append(record)
@@ -585,10 +585,10 @@ def summarize(records: list[dict[str, Any]]) -> dict[str, Any]:
         "by_course": dict(sorted(by_course.items())),
         "by_source": dict(sorted(by_source.items())),
         "needs_encoder": sum(1 for row in records if row["needs_encoder"]),
-        "v3_abilities": {
-            "covered": sum(1 for row in records if isinstance(row.get("v3"), dict)),
+        "v4_reading_abilities": {
+            "covered": sum(1 for row in records if isinstance(row.get("v4"), dict)),
             "by_course": dict(sorted(Counter(
-                row["course"] for row in records if isinstance(row.get("v3"), dict)
+                row["course"] for row in records if isinstance(row.get("v4"), dict)
             ).items())),
         },
         "duplicate_title_groups": sum(1 for count in duplicate_groups.values() if count > 1),
@@ -621,7 +621,12 @@ def main() -> None:
         default=Path("data/encoder_chart_stats_ordinal.json"),
         help="Generated fallback stats; defaults to the retained pre-tuning ordinal const model.",
     )
-    parser.add_argument("--v3-abilities", type=Path, default=Path("data/v3_abilities.json"))
+    parser.add_argument(
+        "--v4-reading-abilities",
+        type=Path,
+        default=Path("data/v4_reading_abilities.json"),
+        help="Full V4 ability catalog replacing V3 hand speed with reading.",
+    )
     parser.add_argument("--alias-workbook", type=Path, default=Path("太鼓之达人歌曲别名收集表.xlsx"))
     parser.add_argument("--output", type=Path, default=Path("data/chart_data.json"))
     parser.add_argument("--summary", type=Path, default=Path("data/chart_data_summary.json"))
@@ -635,9 +640,9 @@ def main() -> None:
     encoder_stats_by_id: dict[str, Any] = {}
     if args.encoder_stats.exists():
         encoder_stats_by_id = json.loads(args.encoder_stats.read_text(encoding="utf-8"))
-    v3_abilities_by_id: dict[str, Any] = {}
-    if args.v3_abilities.exists():
-        v3_abilities_by_id = json.loads(args.v3_abilities.read_text(encoding="utf-8"))
+    v4_abilities_by_id: dict[str, Any] = {}
+    if args.v4_reading_abilities.exists():
+        v4_abilities_by_id = json.loads(args.v4_reading_abilities.read_text(encoding="utf-8"))
     alias_index = build_song_alias_index(args.alias_workbook)
     excel_by_course = build_excel_by_course(strict_rows)
     bpm_by_path = build_bpm_by_path(ese_rows)
@@ -648,7 +653,7 @@ def main() -> None:
         encoder_stats_by_id,
         bpm_by_path,
         alias_index,
-        v3_abilities_by_id,
+        v4_abilities_by_id,
     )
     summary = summarize(records)
     summary["alias_workbook"] = {

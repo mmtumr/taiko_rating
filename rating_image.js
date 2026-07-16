@@ -67,7 +67,7 @@
 
   const DIMENSIONS = [
     { key: "stamina", label: "体力" },
-    { key: "handspeed", label: "手速" },
+    { key: "reading", label: "读谱" },
     { key: "burst", label: "爆发" },
     { key: "accuracy", label: "精度" },
     { key: "rhythm", label: "节奏" },
@@ -287,7 +287,7 @@
     const calculated = { ...row, classicSingle: single, goodRate: accuracy, x, y };
     const fallback = {
       stamina: Math.sqrt((single * stamina * 15.5) / 100),
-      handspeed: Math.sqrt((single * stamina * 15.5) / 100),
+      reading: Math.sqrt((single * speed * 15.5) / 100),
       burst: Math.sqrt((single * speed * 15.5) / 100),
       accuracy: Math.sqrt(single * y),
       rhythm: Math.sqrt((single * rhythm * 15.5) / 100),
@@ -300,21 +300,14 @@
   function calculateAbilityDimensions(row, accuracyPer, notes) {
     const chart = row.ability;
     const accuracy = accuracyY(accuracyPer);
-    if (!chart || !Number.isFinite(accuracy)) return null;
+    const required = ["stamina", "reading", "burst", "complex", "rhythm"];
+    if (!chart || !Number.isFinite(accuracy) || required.some((key) => !Number.isFinite(Number(chart[key])))) return null;
     const singleRating = (constant) => {
       const x = Number(constant);
       const p = 150 - Math.sqrt(Math.max(0, 150 ** 2 - (x - accuracy) ** 2 / 2));
       const w = Math.max(Math.sqrt(Math.max(0, 25 - (x - 15.5) ** 2 / 25 - (accuracy - 23) ** 2 / 69)) - 4, 0.5);
       return powerMean(x, accuracy, w, p) || 0;
     };
-    const handspeed = singleRating(chart.handspeed);
-    const hsFactor = Number(chart.handspeed) > 0 ? Math.min(accuracy / Number(chart.handspeed), 1) : 1;
-    const burstCandidate = singleRating(chart.burst) * hsFactor;
-    const denominator = Number(chart.burst) - Number(chart.handspeed);
-    const blend = Math.abs(denominator) < 1e-9
-      ? (accuracy > Number(chart.handspeed) ? 1 : 0)
-      : clamp((accuracy - Number(chart.handspeed)) / denominator, 0, 1);
-    const burst = burstCandidate > handspeed ? handspeed + blend * (burstCandidate - handspeed) : burstCandidate;
     const badRate = notes > 0 ? Number(row.ng || 0) / notes : 0;
     const complexPenalty = (5000 / 9) * Math.max(0.03 - badRate, 0) ** 2 + 0.5;
     const rating = Number(row.classicSingle || 0);
@@ -329,10 +322,10 @@
     }
     return {
       stamina: singleRating(chart.stamina),
-      handspeed,
-      burst,
+      reading: singleRating(chart.reading),
+      burst: singleRating(chart.burst),
       accuracy: accuracyRt,
-      rhythm: singleRating(chart.rhythm) * hsFactor,
+      rhythm: singleRating(chart.rhythm),
       complex: singleRating(chart.complex) * complexPenalty,
     };
   }

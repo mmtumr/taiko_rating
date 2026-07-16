@@ -1,0 +1,39 @@
+{
+  "chart_rows": 6781,
+  "selected": 5920,
+  "already_present": 4254,
+  "generated": 1666,
+  "covered": 5920,
+  "coverage": 1.0,
+  "by_course": {
+    "Edit": 371,
+    "Oni": 2725,
+    "Hard": 2822,
+    "Normal": 2
+  },
+  "forced_normal": [
+    {
+      "id": "ese:ESE-master\\ese\\09 Namco Original\\Dark Ex Machina\\Dark Ex Machina.tja::Normal",
+      "title": "DARK EX MACHINA♡",
+      "covered": true
+    },
+    {
+      "id": "ese:ESE-master\\ese\\09 Namco Original\\Yuugen no Ran\\Yuugen no Ran.tja::Normal",
+      "title": "幽玄之乱",
+      "covered": true
+    }
+  ],
+  "checkpoint": "checkpoints\\encoder_custom_abilities_v4_reading_density\\best.pt",
+  "labels": [
+    "main",
+    "stamina",
+    "reading",
+    "burst",
+    "complex",
+    "rhythm"
+  ],
+  "model": "encoder_custom_abilities_v4_reading_density",
+  "device": "cuda",
+  "elapsed_seconds": 467.57,
+  "errors": []
+}

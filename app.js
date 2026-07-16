@@ -1,12 +1,12 @@
 const API_BASE = "https://kinoko.zorua.cn/api/v1";
-const DATA_VERSION = "20260716-event-scroll-position";
+const DATA_VERSION = "20260716-v4-reading";
 const FEEDBACK_API_BASE = window.TAIKO_FEEDBACK_API_BASE || "";
 const CHART_PAGE_SIZE = 10;
 const RECOMMEND_COUNT = 20;
 
 const RADAR_DIMS = [
   { key: "stamina", label: "体力" },
-  { key: "handspeed", label: "手速" },
+  { key: "reading", label: "读谱" },
   { key: "burst", label: "爆发" },
   { key: "accuracy", label: "精度" },
   { key: "rhythm", label: "节奏" },
@@ -478,7 +478,7 @@ function indexChartData(charts) {
       const: Number(chart.const),
       combo: chart.combo,
       features: chart.features || {},
-      ability: chart.v3 || null,
+      ability: chart.v4 || chart.v3 || null,
       source: chart.source,
       needs_encoder: Boolean(chart.needs_encoder),
       raw: chart,
@@ -536,10 +536,10 @@ async function loadChartData() {
     if (!resp.ok || !v2Resp.ok) throw new Error(`HTTP ${resp.status}/${v2Resp.status}`);
     const [charts, v2Rows] = await Promise.all([resp.json(), v2Resp.json()]);
     state.v2Constants = new Map((Array.isArray(v2Rows) ? v2Rows : []).map((row) => [chartKey(row.id, row.level), row]));
-    const embeddedV3 = (Array.isArray(charts) ? charts : [])
-      .map((chart) => chart?.v3)
+    const embeddedV4 = (Array.isArray(charts) ? charts : [])
+      .map((chart) => chart?.v4 || chart?.v3)
       .filter((ability) => ability && Number.isFinite(Number(ability.main)));
-    window.TaikoRatingImage?.setAbilityCatalog?.(embeddedV3.length ? embeddedV3 : (Array.isArray(v2Rows) ? v2Rows : []));
+    window.TaikoRatingImage?.setAbilityCatalog?.(embeddedV4.length ? embeddedV4 : (Array.isArray(v2Rows) ? v2Rows : []));
     state.chartData = Array.isArray(charts) ? charts : [];
     await loadLocalPreviews();
     indexChartData(state.chartData);
@@ -868,7 +868,7 @@ function renderRatingTable(summary = state.ratingSummary) {
         </linearGradient>
       </defs>
       <rect width="${width}" height="${height}" fill="#f7f5f2" />
-      <text x="${margin}" y="26" font-size="15" fill="#66717d">综合 Rating、推荐定数与 V3 六维能力</text>
+      <text x="${margin}" y="26" font-size="15" fill="#66717d">综合 Rating、推荐定数与 V4 六维能力</text>
       ${topCards}
       ${radarBlock}
       ${sectionSvg}
@@ -892,10 +892,10 @@ function renderRatingDetail(item) {
   const accent = levelColor(row.level);
   const rankLabel = scoreRankLabel(row.bestScoreRank, row.highScore);
   const rankColor = scoreRankColor(row.bestScoreRank, row.highScore);
-  const abilitySource = Number.isFinite(Number(chartAbility.main)) ? "V3 谱面能力模型" : "谱面特征兼容回退";
+  const abilitySource = Number.isFinite(Number(chartAbility.main)) ? "V4 谱面能力模型" : "谱面特征兼容回退";
   const abilityHints = {
     stamina: "持续处理与耐力",
-    handspeed: "连续手速处理",
+    reading: "流速、变速与同屏读谱",
     burst: "短时高密度爆发",
     accuracy: "当前成绩精度表现",
     rhythm: "节奏与变速处理",
@@ -961,7 +961,7 @@ function renderRatingDetail(item) {
       .join("")}</div>
     <section class="rating-detail-section">
       <div class="rating-detail-section-head">
-        <div><h3>本次成绩新六维</h3><p>按当前成绩与 V3 谱面能力共同计算；数值为绝对能力，不是玩家百分位。</p></div>
+        <div><h3>本次成绩新六维</h3><p>按当前成绩与 V4 谱面能力共同计算；数值为绝对能力，不是玩家百分位。</p></div>
       </div>
       <div class="rating-detail-ability-grid">${abilityCards}</div>
     </section>
@@ -1195,7 +1195,7 @@ function chartFeatureNumber(chart, key) {
 }
 
 function chartTrainingProfile(chart) {
-  const ability = chart?.v3 || {};
+  const ability = chart?.v4 || chart?.v3 || {};
   const complex = chartFeatureNumber(chart, "complex");
   const avgDensity = chartFeatureNumber(chart, "avg_density");
   const peakDensity = chartFeatureNumber(chart, "peak_density");
@@ -1206,7 +1206,7 @@ function chartTrainingProfile(chart) {
   const stability = 100 - (complex * 0.28 + rhythm * 0.24 + bpmChange * 0.22 + hsChange * 0.18 + peakDensity * 0.08);
   return {
     stamina: clamp(Number.isFinite(Number(ability.stamina)) ? Number(ability.stamina) / 15.5 : avgDensity / 100, 0, 1),
-    handspeed: clamp(Number.isFinite(Number(ability.handspeed)) ? Number(ability.handspeed) / 15.5 : avgDensity / 100, 0, 1),
+    reading: clamp(Number.isFinite(Number(ability.reading)) ? Number(ability.reading) / 15.5 : (bpmChange + hsChange + avgDensity * 0.35) / 130, 0, 1),
     burst: clamp(Number.isFinite(Number(ability.burst)) ? Number(ability.burst) / 15.5 : peakDensity / 100, 0, 1),
     accuracy: clamp(stability / 100, 0, 1),
     rhythm: clamp(Number.isFinite(Number(ability.rhythm)) ? Number(ability.rhythm) / 15.5 : (rhythm + bpmChange * 0.35 + hsChange * 0.2) / 130, 0, 1),
@@ -1321,9 +1321,9 @@ function recommendationBandClass(band) {
 }
 
 function recommendationFeatureText(chart) {
-  const ability = chart.v3 || {};
-  if (["stamina", "handspeed", "burst", "rhythm", "complex"].every((key) => Number.isFinite(Number(ability[key])))) {
-    return `体 ${formatLoose(ability.stamina)} / 速 ${formatLoose(ability.handspeed)} / 爆 ${formatLoose(ability.burst)} · 节奏 ${formatLoose(ability.rhythm)} · 复合 ${formatLoose(ability.complex)}`;
+  const ability = chart.v4 || chart.v3 || {};
+  if (["stamina", "reading", "burst", "rhythm", "complex"].every((key) => Number.isFinite(Number(ability[key])))) {
+    return `体 ${formatLoose(ability.stamina)} / 读 ${formatLoose(ability.reading)} / 爆 ${formatLoose(ability.burst)} · 节奏 ${formatLoose(ability.rhythm)} · 复合 ${formatLoose(ability.complex)}`;
   }
   const f = chart.features || {};
   return `密度 ${formatLoose(f.avg_density)}/${formatLoose(f.peak_density)} · 节奏 ${formatLoose(f.rhythm)} · 复合 ${formatLoose(f.complex)}`;
