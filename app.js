@@ -486,7 +486,7 @@ function getLocalPreview(chart) {
 
 function songPreviewHref(chart) {
   const songKey = String(chart?.title_normalized || normalizeTitle(chart?.title || chart?.display_title || ""));
-  return songKey ? `fumen.html?song=${encodeURIComponent(songKey)}` : "";
+  return songKey ? `fumen.html?song=${encodeURIComponent(songKey)}&v=20260717-per-song-preview-v2` : "";
 }
 
 function findChartById(id) {
